@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ciencias de la Computación 2</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="app" id="app">
+    <!-- ── Barra superior ─────────────────────────────── -->
+    <header class="topbar">
+      <div class="topbar__head">
+        <span class="topbar__section" id="sectionLabel">Búsquedas Internas</span>
+        <span class="topbar__title">CIENCIAS DE LA COMPUTACIÓN 2</span>
+      </div>
+      <nav class="tabs" id="tabs"><!-- pestañas generadas por JS --></nav>
+    </header>
+
+    <!-- ── Cuerpo: barra lateral + contenido ──────────── -->
+    <div class="body">
+      <aside class="sidebar">
+        <button class="toggle" id="toggle" aria-label="Minimizar barra">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
+               stroke="currentColor" stroke-width="2.4"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 6 9 12l6 6" />
+          </svg>
+        </button>
+        <nav class="nav" id="nav"><!-- secciones generadas por JS --></nav>
+        <p class="sidebar__foot">Estructuras de datos y algoritmos de búsqueda.</p>
+      </aside>
+
+      <main class="content">
+        <div class="placeholder">
+          <p class="placeholder__section" id="phSection">Búsquedas Internas</p>
+          <h2 class="placeholder__title" id="phOption">Secuencial</h2>
+          <p class="placeholder__text">El contenido de esta sección se mostrará aquí.</p>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
