@@ -204,7 +204,54 @@ export default function App() {
     setActive(null)
     setBusy(false)
   }
+// ── Ordenamiento con animación ─────────────────────
+  const sortArray = async () => {
+    if (busy || !rows) return
+    setBusy(true)
+    setMessage({ text: 'Ordenando el arreglo…', tone: 'info' })
 
+    // Trabajaremos con una copia del arreglo para realizar los cambios
+    const currentRows = [...rows]
+
+    // Convertimos a número para comparar. Si la clave está vacía, le damos valor infinito 
+    // para que sea empujada hacia el final del arreglo.
+    const getValue = (key: string) => key === '' ? Infinity : parseInt(key, 10)
+
+    let swapped;
+    for (let i = 0; i < currentRows.length - 1; i++) {
+      swapped = false;
+      for (let j = 0; j < currentRows.length - i - 1; j++) {
+        
+        // 1. Animación: Resaltamos la celda actual en estado de comparación
+        setActive({ pos: currentRows[j].pos, state: 'compare' })
+        await sleep(200) // Un tiempo un poco más rápido (200ms) para que el ordenamiento sea fluido
+
+        const val1 = getValue(currentRows[j].key)
+        const val2 = getValue(currentRows[j + 1].key)
+
+        if (val1 > val2) {
+          // Intercambiamos SOLO el valor 'key'. Mantenemos 'pos' intacto.
+          const temp = currentRows[j].key
+          currentRows[j].key = currentRows[j + 1].key
+          currentRows[j + 1].key = temp
+
+          // Actualizamos el estado para reflejar el cambio en pantalla
+          setRows([...currentRows])
+          swapped = true
+
+          // 2. Animación: Resaltamos la siguiente celda en estado de inserción/cambio
+          setActive({ pos: currentRows[j + 1].pos, state: 'insert' })
+          await sleep(200)
+        }
+      }
+      // Si en la pasada no hubo intercambios, el arreglo ya está ordenado
+      if (!swapped) break;
+    }
+
+    setMessage({ text: 'Arreglo ordenado con éxito.', tone: 'ok' })
+    setActive(null)
+    setBusy(false)
+  }
   // Reparte las filas en dos columnas (mitad izquierda / mitad derecha).
   const half = rows ? Math.ceil(rows.length / 2) : 0
   const leftRows = rows ? rows.slice(0, half) : []
@@ -540,11 +587,15 @@ export default function App() {
                   Buscar
                 </button>
 
-                {!isHash && (
-                  <button className="h-10 shrink-0 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-3 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5">
-                    Ordenar
-                  </button>
-                )}
+               {!isHash && (
+  <button 
+    onClick={sortArray}
+    disabled={busy || !rows}
+    className="h-10 shrink-0 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-3 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5 disabled:cursor-not-allowed disabled:opacity-50"
+  >
+    Ordenar
+  </button>
+)}
                 {isHash && (
                   <div className="relative shrink-0">
                     <span className="pointer-events-none absolute bottom-full left-0 mb-1 whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.12em] text-[#52241A]/60">
