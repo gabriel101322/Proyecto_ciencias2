@@ -15,6 +15,13 @@ export const COLLISION_SOLUTIONS = [
   "Arreglo Anidado",
 ]
 
+export const TREE_ALGORITHMS = [
+  "Búsqueda Digital",
+  "Búsqueda por Residuos",
+  "Búsqueda por Residuos Múltiples",
+  "Árbol de Huffman"
+]
+
 export const SECTIONS: Section[] = [
   {
     id: "internas",
@@ -24,7 +31,7 @@ export const SECTIONS: Section[] = [
       "Secuencial",
       "Binaria",
       "Transformaciones de Claves",
-      "Árboles Binarios",
+      "Árboles de Búsqueda",
     ],
   },
   {

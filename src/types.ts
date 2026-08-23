@@ -13,3 +13,20 @@ export type Row = {
   inactive?: boolean
   collidingKey?: string
 }
+
+export interface TreeNode {
+  id: string
+  label?: string
+  bitOrFreq?: number | string
+  isLeaf?: boolean
+  left?: TreeNode
+  right?: TreeNode
+  children?: TreeNode[]
+  edgeLabel?: string
+  activeState?: "traverse" | "collision" | "placed" | "match" | null
+}
+
+export type PendingChange =
+  | { type: "section"; option: string; sectionId?: SectionId }
+  | { type: "hashAlgo"; algo: string }
+  | { type: "collision"; coll: string; double?: string }
