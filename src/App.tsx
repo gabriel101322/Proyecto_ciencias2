@@ -40,7 +40,7 @@ const SECTIONS: Section[] = [
   },
 ]
 
-type Row = { pos: number; key: string }
+type Row = { pos: number; key: string; inactive?: boolean }
 
 export default function App() {
   const [collapsed, setCollapsed] = useState(false)
@@ -63,16 +63,46 @@ export default function App() {
   const [active, setActive] = useState<{ pos: number; state: 'compare' | 'match' | 'insert' } | null>(null)
   const [message, setMessage] = useState<{ text: string; tone: 'info' | 'ok' | 'warn' } | null>(null)
   const [busy, setBusy] = useState(false)
-
+  const [pendingChange, setPendingChange] = useState<{ option: string; sectionId?: SectionId } | null>(null)
   const current = SECTIONS.find((s) => s.id === activeSection)!
   const isTableView =
     (activeSection === 'internas' || activeSection === 'externas') &&
     activeOption !== 'Árboles Binarios'
   const isHash = activeOption === 'Transformaciones de Claves'
 
+  // Función maestra para cambiar de algoritmo o sección
+  // 1. Abre nuestro modal si hay un arreglo, o cambia directamente si está vacío
+  const handleAlgorithmChange = (newOption: string, newSectionId?: SectionId) => {
+    if (newOption === activeOption && (!newSectionId || newSectionId === activeSection)) return
+
+    if (rows && rows.length > 0) {
+      // En lugar del window.confirm, activamos nuestro modal personalizado
+      setPendingChange({ option: newOption, sectionId: newSectionId })
+    } else {
+      // Si no hay arreglo, cambiamos sin preguntar
+      applyChange(newOption, newSectionId, false)
+    }
+  }
+
+  // 2. Ejecuta la decisión del usuario desde el modal
+  const applyChange = (option: string, sectionId: SectionId | undefined, keepArray: boolean) => {
+    if (!keepArray) {
+      setRows(null)
+      setArraySizeInput('')
+    } else {
+      setRows(rows ? rows.map(r => ({ ...r, inactive: false })) : null)
+    }
+    
+    setActive(null)
+    setMessage(null)
+    setPendingChange(null) // Cierra el modal
+    
+    if (sectionId) setActiveSection(sectionId)
+    setActiveOption(option)
+  }
+
   const selectSection = (section: Section) => {
-    setActiveSection(section.id)
-    setActiveOption(section.options[0])
+    handleAlgorithmChange(section.options[0], section.id)
   }
 
   // Genera una tabla vacía con posiciones 1..N según el tamaño del arreglo.
@@ -142,6 +172,16 @@ export default function App() {
     setActive(null)
     setBusy(false)
   }
+  const handleSearch = () => {
+  // Limpiamos cualquier rastro de particiones anteriores en la interfaz
+  if (rows) setRows(rows.map(r => ({ ...r, inactive: false })))
+  
+  if (activeOption === 'Binaria') {
+    searchBinary()
+  } else {
+    searchSequential()
+  }
+}
 
   // ── Búsqueda secuencial con animación ──────────────────
   const searchSequential = async () => {
@@ -170,6 +210,105 @@ export default function App() {
     setActive(null)
     setBusy(false)
   }
+
+  const searchBinary = async () => {
+  if (busy || !rows) return
+  const key = searchInput.trim()
+  if (!key) {
+    setMessage({ text: 'Escribe una clave para buscar.', tone: 'warn' })
+    return
+  }
+
+  const targetVal = parseInt(key, 10)
+  if (isNaN(targetVal)) return
+
+  // 1. Validación estricta: Verificar que el arreglo esté ordenado
+  let isSorted = true
+  let previousValue = -Infinity
+  const filledRows = rows.filter(r => r.key !== '')
+
+  for (const row of filledRows) {
+    const val = parseInt(row.key, 10)
+    if (val < previousValue) {
+      isSorted = false
+      break
+    }
+    previousValue = val
+  }
+
+  if (!isSorted) {
+    setMessage({ text: 'Error: El arreglo DEBE estar ordenado para usar Búsqueda Binaria.', tone: 'warn' })
+    return
+  }
+
+  setBusy(true)
+  
+  // Clonamos el arreglo para manipular la animación de partición en la UI
+  let currentRows = rows.map(r => ({ ...r, inactive: false }))
+  
+  let left = 0
+  let right = currentRows.length - 1
+
+  // Descartar visualmente los espacios vacíos al final del arreglo
+  while (right >= 0 && currentRows[right].key === '') {
+    currentRows[right].inactive = true
+    right--
+  }
+
+  if (right < 0) {
+    setMessage({ text: 'El arreglo está vacío.', tone: 'warn' })
+    setBusy(false)
+    return
+  }
+
+  let found = false
+
+  // 2. Ejecución del algoritmo con animación
+ while (left <= right) {
+    const mid = Math.floor((left + right) / 2)
+    const midVal = parseInt(currentRows[mid].key, 10)
+
+    setMessage({ text: `Partición actual: [Pos ${currentRows[left].pos} a ${currentRows[right].pos}] - Evaluando mitad: Pos ${currentRows[mid].pos}`, tone: 'info' })
+    
+    // Animar el salto hacia la mitad actual
+    setActive({ pos: currentRows[mid].pos, state: 'compare' })
+    await sleep(600) 
+
+    if (midVal === targetVal) {
+      setActive({ pos: currentRows[mid].pos, state: 'match' })
+      setMessage({ text: `¡Clave "${key}" encontrada en la posición ${currentRows[mid].pos}!`, tone: 'ok' })
+      found = true
+      break
+    } 
+    
+    // Animación: Sombrear y descartar la mitad incorrecta
+    if (midVal < targetVal) {
+      // Sombrear y descartar el lado izquierdo (incluyendo la mitad)
+      for (let i = left; i <= mid; i++) {
+        currentRows[i].inactive = true
+      }
+      left = mid + 1
+    } else {
+      // Sombrear y descartar el lado derecho (incluyendo la mitad)
+      for (let i = mid; i <= right; i++) {
+        currentRows[i].inactive = true
+      }
+      right = mid - 1
+    }
+    
+    // Aplicar los cambios al estado y esperar para ver el efecto visual de sombra
+    setRows([...currentRows])
+    await sleep(500) 
+    
+  }
+
+  if (!found) {
+    setMessage({ text: `La clave "${key}" no se encuentra en el arreglo.`, tone: 'warn' })
+    setActive(null)
+  }
+  
+  setBusy(false)
+}
 
   // ── Borrado de clave con animación ─────────────────────
   const deleteSequential = async () => {
@@ -280,7 +419,7 @@ export default function App() {
             return (
               <button
                 key={option}
-                onClick={() => setActiveOption(option)}
+                onClick={() => handleAlgorithmChange(option)}
                 className={`relative min-w-0 truncate rounded-t-lg px-4 py-2.5 text-[clamp(11px,1.1vw,13px)] font-medium transition-colors ${
                   selected
                     ? 'bg-[#faf6f2] text-[#52241A]'
@@ -477,52 +616,60 @@ export default function App() {
                   <div className="grid grid-cols-1 md:grid-cols-2 md:divide-x md:divide-[#52241A]/15">
                     {[leftRows, rightRows].map((group, gi) => (
                       <table key={gi} className="w-full border-collapse text-sm">
-                        <thead className="sticky top-0 bg-[#52241A] text-white">
-                          <tr>
-                            <th className="w-28 border-b border-[#52241A] px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.18em]">
-                              Posición
-                            </th>
-                            <th className="border-b border-[#52241A] px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.18em]">
-                              Clave
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {group.map((row) => {
-                            const act = active?.pos === row.pos ? active.state : null
-                            const rowClass =
-                              act === 'match'
-                                ? 'bg-[#2f7d4f] text-white'
-                                : act === 'insert'
-                                  ? 'bg-[#E6B793] text-[#52241A]'
-                                  : act === 'compare'
-                                    ? 'bg-[#6B2E24] text-white'
-                                    : 'odd:bg-[#faf6f2]/60 hover:bg-[#E6B793]/20'
-                            return (
-                              <tr
-                                key={row.pos}
-                                className={`transition-colors duration-200 ${rowClass}`}
-                              >
-                                <td
-                                  className={`border-b border-[#52241A]/10 px-4 py-2 font-medium tabular-nums ${act ? '' : 'text-[#52241A]'}`}
-                                >
-                                  {row.pos}
-                                </td>
-                                <td className={`border-b border-[#52241A]/10 px-4 py-2 ${act ? '' : 'text-[#2b1610]'}`}>
-                                  {row.key || (
-                                    <span className={act ? 'opacity-60' : 'text-[#52241A]/25'}>—</span>
-                                  )}
-                                </td>
-                              </tr>
-                            )
-                          })}
-                          {group.length === 0 && (
-                            <tr>
-                              <td colSpan={2} className="px-4 py-8 text-center text-[#52241A]/30">—</td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
+  <thead className="sticky top-0 z-10 bg-[#52241A] text-white">
+    <tr>
+      <th className="w-28 border-b border-[#52241A] px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.18em]">
+        Posición
+      </th>
+      <th className="w-full border-b border-[#52241A] px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.18em]">
+        Clave
+      </th>
+    </tr>
+  </thead>
+  <tbody>
+    {group.map((row) => {
+      const act = active?.pos === row.pos ? active.state : null
+      
+      // Lógica de estilos actualizada con el estado inactivo (sombra)
+      let rowClass = ''
+      if (act === 'match') {
+        rowClass = 'bg-[#2f7d4f] text-white font-semibold'
+      } else if (act === 'insert') {
+        rowClass = 'bg-[#E6B793] text-[#52241A] font-semibold'
+      } else if (act === 'compare') {
+        rowClass = 'bg-[#6B2E24] text-white font-semibold'
+      } else if (row.inactive) {
+        // --- ESTE ES EL NUEVO EFECTO DE SOMBRA ---
+        rowClass = 'opacity-20 bg-[#2b1610]/15 grayscale blur-[0.5px] select-none pointer-events-none'
+      } else {
+        rowClass = 'odd:bg-[#faf6f2]/60 hover:bg-[#E6B793]/20'
+      }
+
+      return (
+        <tr
+          key={row.pos}
+          className={`transition-all duration-500 ${rowClass}`}
+        >
+          <td
+            className={`border-b border-[#52241A]/10 px-4 py-2 font-medium tabular-nums ${act ? '' : 'text-[#52241A]'}`}
+          >
+            {row.pos}
+          </td>
+          <td className={`border-b border-[#52241A]/10 px-4 py-2 ${act ? '' : 'text-[#2b1610]'}`}>
+            {row.key || (
+              <span className={act ? 'opacity-60' : 'text-[#52241A]/25'}>—</span>
+            )}
+          </td>
+        </tr>
+      )
+    })}
+    {group.length === 0 && (
+      <tr>
+        <td colSpan={2} className="px-4 py-8 text-center text-[#52241A]/30">—</td>
+      </tr>
+    )}
+  </tbody>
+</table>
                     ))}
                   </div>
                 ) : (
@@ -573,28 +720,28 @@ export default function App() {
                   <input
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && searchSequential()}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                     disabled={busy}
                     placeholder="Buscar clave"
                     className="h-10 w-full rounded-lg border border-[#52241A]/20 bg-white pl-9 pr-3 text-[13px] text-[#2b1610] shadow-sm outline-none transition placeholder:text-[#52241A]/30 focus:border-[#6B2E24] focus:ring-2 focus:ring-[#E6B793] disabled:opacity-50"
-                  />
+                    />
                 </div>
                 <button
-                  onClick={searchSequential}
+                  onClick={handleSearch}
                   disabled={busy || !rows}
                   className="h-10 shrink-0 rounded-lg bg-[#6B2E24] px-2 text-[12px] xl:px-3 xl:text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#52241A] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Buscar
-                </button>
+              >
+                Buscar
+              </button>
 
                {!isHash && (
-  <button 
-    onClick={sortArray}
-    disabled={busy || !rows}
-    className="h-10 shrink-0 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-3 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5 disabled:cursor-not-allowed disabled:opacity-50"
-  >
-    Ordenar
-  </button>
+                 <button 
+                    onClick={sortArray}
+                    disabled={busy || !rows}
+                    className="h-10 shrink-0 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-3 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                   Ordenar
+                  </button>
 )}
                 {isHash && (
                   <div className="relative shrink-0">
@@ -700,6 +847,34 @@ export default function App() {
           )}
         </main>
       </div>
+      {/* ── Modal personalizado de confirmación ────────────────────── */}
+      {pendingChange && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2b1610]/40 backdrop-blur-[2px] transition-all">
+          <div className="w-full max-w-md animate-in fade-in zoom-in-95 rounded-2xl bg-[#faf6f2] p-7 shadow-2xl ring-1 ring-[#52241A]/10">
+            <h3 className="text-xl font-semibold text-[#52241A]">¿Conservar arreglo actual?</h3>
+            <p className="mt-3 text-[14px] leading-relaxed text-[#52241A]/75">
+              Estás a punto de cambiar al algoritmo <strong className="font-semibold text-[#6B2E24]">"{pendingChange.option}"</strong>. ¿Deseas mantener los datos actuales en la tabla o empezar con un arreglo vacío?
+            </p>
+            
+            <div className="mt-8 flex justify-end gap-3">
+              {/* Botón: Borrar */}
+              <button
+                onClick={() => applyChange(pendingChange.option, pendingChange.sectionId, false)}
+                className="h-10 rounded-lg border border-[#52241A]/20 bg-white px-4 text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5"
+              >
+                Empezar de cero
+              </button>
+              {/* Botón: Conservar */}
+              <button
+                onClick={() => applyChange(pendingChange.option, pendingChange.sectionId, true)}
+                className="h-10 rounded-lg bg-[#6B2E24] px-4 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#52241A] active:scale-[0.98]"
+              >
+                Mantener datos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
