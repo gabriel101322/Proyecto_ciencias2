@@ -721,6 +721,197 @@ export default function App() {
       setMessage({ text: "Escribe la clave que deseas borrar.", tone: "warn" })
       return
     }
+    
+    if (isHash) {
+      if (!hashAlgo || !collision || (collision === "Doble Función Hash" && !doubleHash)) {
+        setMessage({ text: "Falta seleccionar algoritmo o método de colisión.", tone: "warn" })
+        return
+      }
+
+      setBusy(true)
+      setMessage({ text: `Calculando Hash para borrar "${key}"…`, tone: "info" })
+
+      const N = rows.length
+      const k = parseInt(key, 10)
+
+      let initialExplanation: ReactNode = null
+      let pos = computeInitialHash(k, hashAlgo, N)
+
+      if (hashAlgo === "Hash Mod") {
+        initialExplanation = (
+          <div key="init" className="mb-4">
+            <p className="mb-1 font-semibold text-[#52241A]">1. Cálculo Hash Mod</p>
+            <ul className="text-sm text-[#52241A]/80 ml-2 space-y-2">
+              <li><strong>Fórmula:</strong> h(k) = (k mod N) + 1</li>
+              <li>{renderLongDivision(k, N)}</li>
+              <li className="pt-1 text-[#2b1610]">
+                <strong>Posición asignada:</strong> <span className="font-bold text-[#a23b2a]">{pos}</span>
+              </li>
+            </ul>
+          </div>
+        )
+      } else if (hashAlgo === "Hash Cuadrado") {
+        const sq = (k * k).toString()
+        const mid = Math.floor(sq.length / 2)
+        const digits = sq.substring(Math.max(0, mid - 1), mid + 1)
+        const extractedVal = parseInt(digits || "0", 10)
+        const needsMod = extractedVal >= N
+        initialExplanation = (
+          <div key="init" className="mb-4">
+            <p className="mb-1 font-semibold text-[#52241A]">1. Cálculo Hash Cuadrado</p>
+            <ul className="text-sm text-[#52241A]/80 ml-2 space-y-1">
+              <li><strong>Clave al cuadrado:</strong> {k}² = {sq}</li>
+              <li><strong>Dígitos centrales:</strong> "{digits}"</li>
+              <li><strong>Fórmula:</strong> h(k) = {needsMod ? `(${digits} mod N) + 1` : `${digits} + 1`}</li>
+              <li><strong>Posición inicial:</strong> <span className="font-bold text-[#a23b2a]">{pos}</span></li>
+            </ul>
+          </div>
+        )
+      } else if (hashAlgo === "Truncamiento") {
+        const str = k.toString()
+        let trunc = ""
+        for (let i = 0; i < str.length; i += 2) trunc += str[i]
+        const extractedVal = parseInt(trunc || "0", 10)
+        const needsMod = extractedVal >= N
+        initialExplanation = (
+          <div key="init" className="mb-4">
+            <p className="mb-1 font-semibold text-[#52241A]">1. Cálculo Truncamiento</p>
+            <ul className="text-sm text-[#52241A]/80 ml-2 space-y-1">
+              <li><strong>Extracción (pos pares):</strong> "{trunc}"</li>
+              <li><strong>Fórmula:</strong> h(k) = {needsMod ? `(${trunc} mod N) + 1` : `${trunc} + 1`}</li>
+              <li><strong>Posición inicial:</strong> <span className="font-bold text-[#a23b2a]">{pos}</span></li>
+            </ul>
+          </div>
+        )
+      } else if (hashAlgo === "Hash Plegamiento") {
+        const str = k.toString()
+        let sum = 0
+        let parts = []
+        for (let i = 0; i < str.length; i += 2) {
+          let part = str.substring(i, i + 2)
+          sum += parseInt(part, 10)
+          parts.push(part)
+        }
+        const needsMod = sum >= N
+        initialExplanation = (
+          <div key="init" className="mb-4">
+            <p className="mb-1 font-semibold text-[#52241A]">1. Cálculo Hash Plegamiento</p>
+            <ul className="text-sm text-[#52241A]/80 ml-2 space-y-1">
+              <li><strong>División (2 en 2):</strong> {parts.join(" + ")} = {sum}</li>
+              <li><strong>Fórmula:</strong> h(k) = {needsMod ? `(${sum} mod N) + 1` : `${sum} + 1`}</li>
+              <li><strong>Posición inicial:</strong> <span className="font-bold text-[#a23b2a]">{pos}</span></li>
+            </ul>
+          </div>
+        )
+      }
+
+      const currentSteps: ReactNode[] = [initialExplanation]
+      setHashExplanation({
+        title: `Borrado Hash: ${hashAlgo}`,
+        steps: [...currentSteps],
+      })
+
+      let attempts = 0
+      let found = false
+
+      while (attempts < N) {
+        setActive({ pos, state: "compare" })
+        await sleep(400)
+
+        const rowIdx = pos - 1
+        const currentRow = rows[rowIdx]
+
+        const parts = currentRow.key.split(/, | -> /)
+        const foundIdx = parts.indexOf(key)
+        if (foundIdx !== -1) {
+          setActive({ pos, state: "match", subIndex: foundIdx })
+          await sleep(400)
+          
+          setRows((prev) => {
+            if (!prev) return prev
+            const newRows = [...prev]
+            if (parts.length > 1) {
+              const newParts = [...parts]
+              newParts.splice(foundIdx, 1)
+              const separator = collision === "Lista Enlazada" ? " -> " : ", "
+              newRows[rowIdx] = { ...newRows[rowIdx], key: newParts.join(separator) }
+            } else {
+              newRows[rowIdx] = { ...newRows[rowIdx], key: "" }
+            }
+            return newRows
+          })
+          
+          if (parts.length > 1) {
+            setMessage({ text: `¡Clave "${key}" borrada de la posición ${pos} (columna ${foundIdx + 1})!`, tone: "ok" })
+            currentSteps.push(
+              <div key="match_nested" className="mb-4 mt-2">
+                <p className="mb-1 font-semibold text-[#2f7d4f]">¡Clave borrada!</p>
+                <p className="text-sm text-[#2f7d4f]/90 ml-2">Eliminada en la posición {pos}, alojada en la columna {foundIdx + 1}.</p>
+              </div>
+            )
+          } else {
+            setMessage({ text: `¡Clave "${key}" borrada de la posición ${pos}!`, tone: "ok" })
+            currentSteps.push(
+              <div key="match" className="mb-4 mt-2">
+                <p className="mb-1 font-semibold text-[#2f7d4f]">¡Clave borrada!</p>
+                <p className="text-sm text-[#2f7d4f]/90 ml-2">Eliminada directamente de la posición {pos}.</p>
+              </div>
+            )
+          }
+          setHashExplanation({ title: `Borrado Hash: ${hashAlgo}`, steps: [...currentSteps] })
+          setKeyInput("")
+          found = true
+          break
+        }
+
+        if (currentRow.key === "") {
+          break
+        }
+
+        if (collision === "Lista Enlazada" || collision === "Arreglo Anidado") {
+           break
+        }
+
+        setActive({ pos, state: "collide" })
+        setMessage({ text: `Posición ${pos} ocupada por otra clave. Buscando en siguiente...`, tone: "warn" })
+        
+        currentSteps.push(
+          <div key={`col_detect_${attempts}`} className="mb-2">
+            <p className="mb-1 font-semibold text-[#a23b2a]">Intento {attempts + 2}: Clave distinta en posición {pos}</p>
+            <p className="text-sm text-[#52241A]/80 ml-2">Resolviendo mediante <strong>{collision}</strong>...</p>
+          </div>
+        )
+        setHashExplanation({ title: `Borrado Hash: ${hashAlgo}`, steps: [...currentSteps] })
+
+        attempts++
+        if (collision === "Solución Lineal") {
+          pos = (pos % N) + 1
+        } else if (collision === "Solución Cuadrática") {
+          pos = ((pos - 1 + attempts * attempts) % N) + 1
+        } else if (collision === "Doble Función Hash") {
+          const step = computeSecondaryHash(k, doubleHash, N)
+          pos = ((pos - 1 + step) % N) + 1
+        }
+
+        currentSteps.push(
+          <div key={`col_resolve_${attempts}`} className="mb-4 ml-2 border-l-2 border-[#E6B793] pl-3">
+            <p className="text-sm text-[#52241A]/80">
+              Nueva posición a revisar: <span className="font-bold text-[#a23b2a]">{pos}</span>
+            </p>
+          </div>
+        )
+        setHashExplanation({ title: `Borrado Hash: ${hashAlgo}`, steps: [...currentSteps] })
+      }
+
+      if (!found) {
+        setMessage({ text: `La clave "${key}" no se encuentra en la tabla Hash.`, tone: "warn" })
+      }
+      
+      setActive(null)
+      setBusy(false)
+      return
+    }
+
     setBusy(true)
     setMessage({ text: `Borrando "${key}"…`, tone: "info" })
 
@@ -734,14 +925,10 @@ export default function App() {
         setRows((prev) => {
           if (!prev) return prev
           const newRows = [...prev]
-          if (isHash) {
-            newRows[i] = { ...newRows[i], key: "" }
-          } else {
-            newRows[i] = { ...newRows[i], key: "" }
-            const allKeys = newRows.filter((r) => r.key !== "").map((r) => r.key)
-            for (let j = 0; j < newRows.length; j++) {
-              newRows[j] = { ...newRows[j], key: j < allKeys.length ? allKeys[j] : "" }
-            }
+          newRows[i] = { ...newRows[i], key: "" }
+          const allKeys = newRows.filter((r) => r.key !== "").map((r) => r.key)
+          for (let j = 0; j < newRows.length; j++) {
+            newRows[j] = { ...newRows[j], key: j < allKeys.length ? allKeys[j] : "" }
           }
           return newRows
         })
