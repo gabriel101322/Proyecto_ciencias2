@@ -191,18 +191,33 @@ export default function TreeView({ treeData }: TreeViewProps) {
 
     return (
       <g key={`node-${node.id}`} className={`transition-all duration-500 ${extraClasses}`}>
-        {/* Etiqueta de la rama (bits o char) si existe */}
-        {(node.edgeLabel !== undefined || node.bitOrFreq !== undefined) && (
+        {/* Etiqueta de la rama (0 o 1) si existe */}
+        {node.edgeLabel !== undefined && (
           <text
             x={node.x}
             y={node.y - 25}
             textAnchor="middle"
-            fontSize="10"
-            fill="#52241A"
-            opacity="0.7"
+            fontSize="11"
+            fill={(node.edgeLabel === "0" || node.edgeLabel === "1") ? "#d32f2f" : "#52241A"}
+            opacity="0.8"
             className="font-mono font-bold tracking-widest drop-shadow-sm"
           >
-            {node.edgeLabel !== undefined ? node.edgeLabel : node.bitOrFreq}
+            {node.edgeLabel}
+          </text>
+        )}
+
+        {/* Etiqueta de probabilidad al lado del nodo (para nodos internos sin label) */}
+        {!node.label && node.bitOrFreq !== undefined && (
+          <text
+            x={node.x + 28}
+            y={node.y + 4}
+            textAnchor="start"
+            fontSize="12"
+            fill="#52241A"
+            opacity="0.75"
+            className="font-mono font-bold"
+          >
+            {node.bitOrFreq}
           </text>
         )}
         

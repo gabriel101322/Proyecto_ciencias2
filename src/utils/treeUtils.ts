@@ -3,12 +3,21 @@ import { TreeNode } from "../types"
 // --- Utilidades Binarias ---
 export function toBinaryString(val: string): string {
   if (!val) return ""
-  // El profesor usa índice alfabético (A=1, B=2... Z=26) en 5 bits, no ASCII.
+  // El profesor usa índice alfabético (A=1, B=2... Z=26) en 5 bits.
+  // Para evitar que los números colisionen (todos daban "00000" y se sobreescribían),
+  // los mapeamos a partir del 27 (27-36).
   return Array.from(val.toUpperCase())
     .map((c) => {
-      const code = c.charCodeAt(0) - 64 // 'A' (65) -> 1
-      if (code < 1 || code > 26) return "00000" // Evitar errores con caracteres especiales
-      return code.toString(2).padStart(5, "0")
+      const code = c.charCodeAt(0)
+      if (code >= 65 && code <= 90) {
+        // A-Z -> 1-26 (5 bits)
+        return (code - 64).toString(2).padStart(5, "0")
+      } else if (code >= 48 && code <= 57) {
+        // 0-9 -> 27-36 (6 bits)
+        return (code - 48 + 27).toString(2).padStart(6, "0")
+      }
+      // Otros caracteres especiales
+      return "00000"
     })
     .join("")
 }
@@ -467,8 +476,10 @@ export function deleteMultiRadixTree(
 }
 
 
+import { HuffmanLogicData, HuffmanReductionStep } from "../types"
+
 // Lee un texto completo y genera el árbol óptimo.
-export function buildHuffmanTree(text: string): { newRoot: TreeNode | null; steps: string[] } {
+export function buildHuffmanTree(text: string): { newRoot: TreeNode | null; steps: string[]; logicData?: HuffmanLogicData } {
   const steps: string[] = []
   if (!text) {
     return { newRoot: null, steps }
@@ -476,43 +487,418 @@ export function buildHuffmanTree(text: string): { newRoot: TreeNode | null; step
 
   steps.push(`Generando árbol de Huffman para el texto: "${text}"`)
 
-  // 1. Contar frecuencias
+  // 1. Contar frecuencias y registrar el primer índice de aparición
   const freqMap: Record<string, number> = {}
-  for (const char of text) {
+  const firstAppearance: Record<string, number> = {}
+  
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]
+    if (firstAppearance[char] === undefined) {
+      firstAppearance[char] = i
+    }
     freqMap[char] = (freqMap[char] || 0) + 1
   }
 
-  // 2. Crear nodos iniciales
-  const nodes: TreeNode[] = Object.entries(freqMap).map(([char, freq]) => ({
+  // 2. Crear nodos iniciales extendidos con un índice para desempatar
+  type ExtendedTreeNode = TreeNode & { appearanceIndex?: number }
+
+  const nodes: ExtendedTreeNode[] = Object.entries(freqMap).map(([char, freq]) => ({
     id: crypto.randomUUID(),
     label: char,
     bitOrFreq: freq,
     isLeaf: true,
+    appearanceIndex: firstAppearance[char]
   }))
 
   steps.push(`Frecuencias calculadas: ${nodes.map(n => `'${n.label}': ${n.bitOrFreq}`).join(", ")}`)
 
-  // 3. Algoritmo de Huffman (Cola de prioridad simulada con sort)
+  const totalLength = text.length
+  const reductionSteps: HuffmanReductionStep[] = []
+
+  // Guardar estado inicial
+  const initialNodesState = nodes.map(n => ({ id: n.id, label: n.label || "", freq: n.bitOrFreq as number }))
+  reductionSteps.push({ remainingNodes: initialNodesState })
+
+  // 3. Algoritmo de Huffman
   while (nodes.length > 1) {
-    // Ordenar de mayor a menor, para sacar los dos menores del final
-    nodes.sort((a, b) => (b.bitOrFreq as number) - (a.bitOrFreq as number))
+    // Usar sort estable: ordenar por frecuencia descendente. 
+    // Si empatan, ordenar por índice de aparición descendente. 
+    nodes.sort((a, b) => {
+      const diff = (b.bitOrFreq as number) - (a.bitOrFreq as number)
+      if (diff !== 0) return diff
+      return (b.appearanceIndex || 0) - (a.appearanceIndex || 0)
+    })
     
     const right = nodes.pop()!
     const left = nodes.pop()!
 
+    // Añadir etiquetas para el visualizador
+    left.edgeLabel = "0"
+    right.edgeLabel = "1"
+
     const newFreq = (left.bitOrFreq as number) + (right.bitOrFreq as number)
-    const newNode: TreeNode = {
+    
+    // El label combinado será la unión de los labels de los hijos, o algo representativo
+    const combinedLabel = `${left.label || left.bitOrFreq}+${right.label || right.bitOrFreq}`
+
+    const newNode: ExtendedTreeNode = {
       id: crypto.randomUUID(),
-      label: "", // Nodo interno sin texto
+      label: combinedLabel,
       bitOrFreq: newFreq,
       left,
       right,
+      appearanceIndex: Math.min(left.appearanceIndex || 0, right.appearanceIndex || 0)
     }
 
     steps.push(`Combinando nodos [${left.label || left.bitOrFreq}] y [${right.label || right.bitOrFreq}] -> Nueva frecuencia combinada: ${newFreq}`)
     nodes.push(newNode)
+
+    // Guardar el paso
+    reductionSteps.push({
+      remainingNodes: nodes.map(n => ({ id: n.id, label: n.label || "", freq: n.bitOrFreq as number })),
+      combined: {
+        leftLabel: left.label || String(left.bitOrFreq),
+        rightLabel: right.label || String(right.bitOrFreq),
+        newLabel: combinedLabel,
+        newFreq
+      }
+    })
   }
 
+  // Limpiar los labels internos del árbol para la visualización final
+  function clearInternalLabels(node: TreeNode) {
+    if (!node.isLeaf) node.label = ""
+    if (node.left) clearInternalLabels(node.left)
+    if (node.right) clearInternalLabels(node.right)
+  }
+  clearInternalLabels(nodes[0])
+
   steps.push(`Árbol de Huffman completado con frecuencia raíz de ${nodes[0].bitOrFreq}.`)
-  return { newRoot: nodes[0], steps }
+  
+  // 4. Extraer códigos
+  const codes: Record<string, string> = {}
+  function extractCodes(node: TreeNode, prefix: string) {
+    if (node.isLeaf && node.label) {
+      codes[node.label] = prefix
+    }
+    if (node.left) extractCodes(node.left, prefix + "0")
+    if (node.right) extractCodes(node.right, prefix + "1")
+  }
+  extractCodes(nodes[0], "")
+
+  // 5. Calcular tabla y longitud media
+  const codesTable = Object.keys(freqMap).map(char => ({
+    char,
+    code: codes[char],
+    length: codes[char].length,
+    prob: freqMap[char]
+  }))
+
+  let averageLength = 0
+  for (const entry of codesTable) {
+    averageLength += (entry.prob / totalLength) * entry.length
+  }
+
+  // 6. Cadena binaria
+  const encodedString = text.split("").map(c => codes[c]).join("|")
+
+  const logicData: HuffmanLogicData = {
+    text,
+    totalLength,
+    initialFrequencies: freqMap,
+    reductionSteps,
+    codes: codesTable,
+    averageLength,
+    encodedString
+  }
+
+  return { newRoot: nodes[0], steps, logicData }
+}
+
+// --- FUNCIONES DE BÚSQUEDA Y ELIMINACIÓN ---
+
+export function searchDigitalTree(
+  root: TreeNode | null,
+  key: string
+): { steps: string[]; frames: TreeFrame[] } {
+  const binary = toBinaryString(key)
+  const steps: string[] = []
+  const frames: TreeFrame[] = []
+
+  if (!root) {
+    steps.push(`El árbol está vacío. No se encontró "${key}".`)
+    return { steps, frames }
+  }
+
+  const newRoot = JSON.parse(JSON.stringify(root)) as TreeNode
+  let curr: TreeNode | undefined = newRoot
+  let i = 0
+
+  while (curr) {
+    curr.activeState = "traverse"
+    const visitMsg = `Visitando nodo con etiqueta "${curr.label || 'Vacio'}".`
+    steps.push(visitMsg)
+    frames.push({ treeState: JSON.parse(JSON.stringify(newRoot)), description: visitMsg })
+
+    if ((curr.label || "").toUpperCase() === key.toUpperCase()) {
+      curr.activeState = "placed"
+      const matchMsg = `¡Clave "${key}" encontrada en el árbol!`
+      steps.push(matchMsg)
+      frames.push({ treeState: JSON.parse(JSON.stringify(newRoot)), description: matchMsg })
+      curr.activeState = null
+      return { steps, frames }
+    }
+
+    const bit = binary[i % binary.length] || "0"
+    const evalMsg = `La clave no coincide. Evaluando bit ${i} del binario ${binary}: es ${bit}.`
+    steps.push(evalMsg)
+    frames.push({ treeState: JSON.parse(JSON.stringify(newRoot)), description: evalMsg })
+    curr.activeState = null
+
+    if (bit === "0") {
+      curr = curr.left
+    } else {
+      curr = curr.right
+    }
+    i++
+  }
+
+  const notFoundMsg = `No hay más caminos posibles. La clave "${key}" no se encontró.`
+  steps.push(notFoundMsg)
+  frames.push({ treeState: JSON.parse(JSON.stringify(newRoot)), description: notFoundMsg })
+  return { steps, frames }
+}
+
+export function deleteDigitalTree(
+  root: TreeNode | null,
+  key: string
+): { newRoot: TreeNode | null; steps: string[]; frames: TreeFrame[] } {
+  const binary = toBinaryString(key)
+  const steps: string[] = []
+  const frames: TreeFrame[] = []
+
+  if (!root) {
+    steps.push(`El árbol está vacío.`)
+    return { newRoot: null, steps, frames }
+  }
+
+  const newRoot = JSON.parse(JSON.stringify(root)) as TreeNode
+  let found = false
+
+  function remove(node: TreeNode | undefined, depth: number): TreeNode | undefined {
+    if (!node) {
+      const notFoundMsg = `Se alcanzó un camino vacío. La clave "${key}" no existe.`
+      if (!found) {
+        steps.push(notFoundMsg)
+        frames.push({ treeState: JSON.parse(JSON.stringify(newRoot)), description: notFoundMsg })
+      }
+      return undefined
+    }
+
+    node.activeState = "traverse"
+    const visitMsg = `Visitando nodo con etiqueta "${node.label || 'Vacio'}".`
+    steps.push(visitMsg)
+    frames.push({ treeState: JSON.parse(JSON.stringify(newRoot)), description: visitMsg })
+
+    if ((node.label || "").toUpperCase() === key.toUpperCase()) {
+      found = true
+      node.activeState = "collision"
+      const matchMsg = `¡Clave "${key}" encontrada! Procediendo a borrar.`
+      steps.push(matchMsg)
+      frames.push({ treeState: JSON.parse(JSON.stringify(newRoot)), description: matchMsg })
+      
+      // Borrado lógico
+      node.label = ""
+      node.activeState = "placed"
+      const delMsg = `Clave borrada lógicamente (etiqueta vacía).`
+      steps.push(delMsg)
+      frames.push({ treeState: JSON.parse(JSON.stringify(newRoot)), description: delMsg })
+      node.activeState = null
+
+      if (!node.left && !node.right) {
+        const pruneMsg = `El nodo quedó vacío y no tiene hijos. Eliminándolo completamente.`
+        steps.push(pruneMsg)
+        frames.push({ treeState: JSON.parse(JSON.stringify(newRoot)), description: pruneMsg })
+        return undefined
+      }
+
+      return node
+    }
+
+    const bit = binary[depth % binary.length] || "0"
+    const evalMsg = `La clave no coincide. Evaluando bit ${depth}: es ${bit}.`
+    steps.push(evalMsg)
+    frames.push({ treeState: JSON.parse(JSON.stringify(newRoot)), description: evalMsg })
+    node.activeState = null
+
+    if (bit === "0") {
+      node.left = remove(node.left, depth + 1)
+    } else {
+      node.right = remove(node.right, depth + 1)
+    }
+
+    // Poda post-orden: Si al regresar, este nodo no tiene etiqueta ni hijos, lo podamos
+    if (!node.label && !node.left && !node.right) {
+      const pruneMsg = `El nodo interno quedó vacío y sin hijos. Eliminándolo (poda).`
+      steps.push(pruneMsg)
+      node.activeState = "collision" // Resaltar antes de podar
+      frames.push({ treeState: JSON.parse(JSON.stringify(newRoot)), description: pruneMsg })
+      return undefined
+    }
+
+    return node
+  }
+
+  const finalRoot = remove(newRoot, 0)
+  return { newRoot: finalRoot || null, steps, frames }
+}
+
+export function searchRadixTree(
+  root: TreeNode | null,
+  key: string
+): { steps: string[]; frames: TreeFrame[] } {
+  const binary = toBinaryString(key)
+  const steps: string[] = []
+  const frames: TreeFrame[] = []
+
+  if (!root) {
+    steps.push(`Árbol vacío.`)
+    return { steps, frames }
+  }
+
+  const newRoot = JSON.parse(JSON.stringify(root)) as TreeNode
+  
+  function traverse(node: TreeNode, depth: number) {
+    node.activeState = "traverse"
+    if (node.isLeaf) {
+      if ((node.label || "").toUpperCase() === key.toUpperCase()) {
+        node.activeState = "placed"
+        const msg = `¡Hoja alcanzada! La clave "${key}" fue encontrada.`
+        steps.push(msg)
+        frames.push({ treeState: JSON.parse(JSON.stringify(newRoot)), description: msg })
+        node.activeState = null
+      } else {
+        node.activeState = "collision"
+        const msg = `Llegamos a una hoja, pero contiene "${node.label}" en lugar de "${key}". No encontrada.`
+        steps.push(msg)
+        frames.push({ treeState: JSON.parse(JSON.stringify(newRoot)), description: msg })
+        node.activeState = null
+      }
+      return
+    }
+
+    const m = `Nodo interno en profundidad ${depth}.`
+    steps.push(m)
+    frames.push({ treeState: JSON.parse(JSON.stringify(newRoot)), description: m })
+
+    if (depth >= 5) {
+      node.activeState = null
+      return
+    }
+
+    const bit = binary[depth]
+    const evalMsg = `Evaluando bit ${depth} (${bit}). Avanzando por la rama ${bit}.`
+    steps.push(evalMsg)
+    frames.push({ treeState: JSON.parse(JSON.stringify(newRoot)), description: evalMsg })
+    node.activeState = null
+
+    const child = bit === "0" ? node.left : node.right
+    if (!child) {
+      const emptyMsg = `La rama ${bit} está vacía. La clave "${key}" no existe en el árbol.`
+      steps.push(emptyMsg)
+      frames.push({ treeState: JSON.parse(JSON.stringify(newRoot)), description: emptyMsg })
+      return
+    }
+
+    traverse(child, depth + 1)
+  }
+
+  traverse(newRoot, 0)
+  return { steps, frames }
+}
+
+export function deleteRadixTree(
+  root: TreeNode | null,
+  key: string
+): { newRoot: TreeNode | null; steps: string[]; frames: TreeFrame[] } {
+  const binary = toBinaryString(key)
+  const steps: string[] = []
+  const frames: TreeFrame[] = []
+
+  if (!root) {
+    steps.push(`Árbol vacío.`)
+    return { newRoot: null, steps, frames }
+  }
+
+  const newRoot = JSON.parse(JSON.stringify(root)) as TreeNode
+
+  function remove(node: TreeNode, depth: number): TreeNode | undefined {
+    node.activeState = "traverse"
+    
+    if (node.isLeaf) {
+      if ((node.label || "").toUpperCase() === key.toUpperCase()) {
+        node.activeState = "collision"
+        const msg = `¡Clave "${key}" encontrada! Procediendo a eliminar la hoja.`
+        steps.push(msg)
+        frames.push({ treeState: JSON.parse(JSON.stringify(newRoot)), description: msg })
+        node.activeState = null
+        return undefined
+      } else {
+        node.activeState = null
+        const msg = `Hoja equivocada ("${node.label}"). La clave "${key}" no existe.`
+        steps.push(msg)
+        frames.push({ treeState: JSON.parse(JSON.stringify(newRoot)), description: msg })
+        return node
+      }
+    }
+
+    const msg = `Buscando para eliminar: en nodo interno (profundidad ${depth}).`
+    steps.push(msg)
+    frames.push({ treeState: JSON.parse(JSON.stringify(newRoot)), description: msg })
+
+    if (depth >= 5) {
+      node.activeState = null
+      return node
+    }
+
+    const bit = binary[depth]
+    const isLeft = bit === "0"
+
+    const childMsg = `El bit es ${bit}, bajando por la rama ${bit}.`
+    steps.push(childMsg)
+    frames.push({ treeState: JSON.parse(JSON.stringify(newRoot)), description: childMsg })
+    node.activeState = null
+
+    if (isLeft && node.left) {
+      node.left = remove(node.left, depth + 1)
+    } else if (!isLeft && node.right) {
+      node.right = remove(node.right, depth + 1)
+    } else {
+      const err = `La rama ${bit} está vacía. La clave no existe.`
+      steps.push(err)
+      frames.push({ treeState: JSON.parse(JSON.stringify(newRoot)), description: err })
+      return node
+    }
+
+    // Compresión del Trie Perezoso
+    if (depth > 0) {
+      if (node.left && !node.right && node.left.isLeaf) {
+        const cMsg = `Compresión: el nodo interno se quedó solo con la hoja "${node.left.label}". Comprimiendo camino.`
+        steps.push(cMsg)
+        frames.push({ treeState: JSON.parse(JSON.stringify(newRoot)), description: cMsg })
+        return node.left
+      }
+      if (node.right && !node.left && node.right.isLeaf) {
+        const cMsg = `Compresión: el nodo interno se quedó solo con la hoja "${node.right.label}". Comprimiendo camino.`
+        steps.push(cMsg)
+        frames.push({ treeState: JSON.parse(JSON.stringify(newRoot)), description: cMsg })
+        return node.right
+      }
+    }
+
+    return node
+  }
+
+  const finalRoot = remove(newRoot, 0)
+  return { newRoot: finalRoot || null, steps, frames }
 }

@@ -16,6 +16,7 @@ import { TopControls, BottomControls } from "./components/Controls"
 import { TopTreeControls, BottomTreeControls } from "./components/TreeControls"
 import HashExplanation from "./components/HashExplanation"
 import ConfirmModal from "./components/ConfirmModal"
+import HuffmanExplanation from "./components/HuffmanExplanation"
 import { insertDigitalTree, insertRadixTree, insertMultiRadixTree, searchMultiRadixTree, deleteMultiRadixTree, buildHuffmanTree } from "./utils/treeUtils"
 
 export default function App() {
@@ -751,7 +752,7 @@ export default function App() {
     setMessage({ text: `Insertando "${key}" en ${treeAlgo}…`, tone: "info" })
     
     // @ts-ignore - frames will be checked dynamically
-    let result: { newRoot: TreeNode | null; steps: string[]; frames?: any[] } = { newRoot: null, steps: [] }
+    let result: { newRoot: TreeNode | null; steps: string[]; frames?: any[]; logicData?: any } = { newRoot: null, steps: [] }
 
     if (treeAlgo === "Búsqueda Digital") {
       result = insertDigitalTree(treeData, key)
@@ -763,7 +764,13 @@ export default function App() {
       result = buildHuffmanTree(key)
     }
 
-    if (result.frames && result.frames.length > 0) {
+    if (result.logicData) {
+      setTreeData(result.newRoot)
+      setHashExplanation({
+        title: treeAlgo,
+        steps: [<HuffmanExplanation key="huffman" data={result.logicData} />]
+      })
+    } else if (result.frames && result.frames.length > 0) {
       setHashExplanation({ title: treeAlgo, steps: [] })
       for (let i = 0; i < result.frames.length; i++) {
         const frame = result.frames[i]
