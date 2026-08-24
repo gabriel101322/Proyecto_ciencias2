@@ -345,7 +345,7 @@ export function searchMultiRadixTree(
     node.activeState = "traverse"
     frames.push({ treeState: JSON.parse(JSON.stringify(searchRoot)), description: `Buscando en nivel ${bitIndex / 2}.` })
 
-    if (bitIndex >= binary.length) {
+    if (node.isLeaf) {
       if ((node.label || "").toUpperCase() === key.toUpperCase()) {
         found = true
         const msg = `¡La clave "${key}" fue encontrada!`
@@ -353,11 +353,20 @@ export function searchMultiRadixTree(
         node.activeState = "match"
         frames.push({ treeState: JSON.parse(JSON.stringify(searchRoot)), description: msg })
       } else {
-        const msg = `Fin de la búsqueda, pero la clave "${key}" no está en este nodo.`
+        const msg = `Llegamos a la hoja "${node.label}", pero no es la clave "${key}".`
         steps.push(msg)
         node.activeState = "collision"
         frames.push({ treeState: JSON.parse(JSON.stringify(searchRoot)), description: msg })
       }
+      node.activeState = null
+      return
+    }
+
+    if (bitIndex >= binary.length) {
+      const msg = `Fin de la cadena binaria, pero no llegamos a una hoja. Clave "${key}" no encontrada.`
+      steps.push(msg)
+      node.activeState = "collision"
+      frames.push({ treeState: JSON.parse(JSON.stringify(searchRoot)), description: msg })
       node.activeState = null
       return
     }
@@ -411,7 +420,7 @@ export function deleteMultiRadixTree(
     node.activeState = "traverse"
     frames.push({ treeState: JSON.parse(JSON.stringify(deleteRoot)), description: `Buscando "${key}" en nivel ${bitIndex / 2}.` })
 
-    if (bitIndex >= binary.length) {
+    if (node.isLeaf) {
       if ((node.label || "").toUpperCase() === key.toUpperCase()) {
         found = true
         const msg = `¡La clave "${key}" fue encontrada! Procediendo a borrarla.`
@@ -428,13 +437,22 @@ export function deleteMultiRadixTree(
         // Return true if this node can be deleted (no children and not a leaf)
         return (!node.children || node.children.length === 0) && !node.isLeaf && !node.label
       } else {
-        const msg = `Fin del recorrido, pero "${key}" no existe aquí.`
+        const msg = `Llegamos a la hoja "${node.label}", pero no es la clave "${key}".`
         steps.push(msg)
         node.activeState = "collision"
         frames.push({ treeState: JSON.parse(JSON.stringify(deleteRoot)), description: msg })
         node.activeState = null
         return false
       }
+    }
+
+    if (bitIndex >= binary.length) {
+      const msg = `Fin del recorrido binario, pero la clave "${key}" no existe aquí.`
+      steps.push(msg)
+      node.activeState = "collision"
+      frames.push({ treeState: JSON.parse(JSON.stringify(deleteRoot)), description: msg })
+      node.activeState = null
+      return false
     }
 
     const chunk = binary.substring(bitIndex, bitIndex + 2)
@@ -529,8 +547,8 @@ export function buildHuffmanTree(text: string): { newRoot: TreeNode | null; step
       return (b.appearanceIndex || 0) - (a.appearanceIndex || 0)
     })
     
-    const right = nodes.pop()!
-    const left = nodes.pop()!
+    const left = nodes.pop()!  // lowest frequency
+    const right = nodes.pop()! // second lowest (higher) frequency
 
     // Añadir etiquetas para el visualizador
     left.edgeLabel = "0"

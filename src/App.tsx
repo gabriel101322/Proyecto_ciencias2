@@ -17,7 +17,7 @@ import { TopTreeControls, BottomTreeControls } from "./components/TreeControls"
 import HashExplanation from "./components/HashExplanation"
 import ConfirmModal from "./components/ConfirmModal"
 import HuffmanExplanation from "./components/HuffmanExplanation"
-import { insertDigitalTree, insertRadixTree, insertMultiRadixTree, searchMultiRadixTree, deleteMultiRadixTree, buildHuffmanTree } from "./utils/treeUtils"
+import { insertDigitalTree, searchDigitalTree, deleteDigitalTree, insertRadixTree, searchRadixTree, deleteRadixTree, insertMultiRadixTree, searchMultiRadixTree, deleteMultiRadixTree, buildHuffmanTree } from "./utils/treeUtils"
 
 export default function App() {
   const [collapsed, setCollapsed] = useState(false)
@@ -30,6 +30,7 @@ export default function App() {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [keyInput, setKeyInput] = useState("")
   const [searchInput, setSearchInput] = useState("")
+  const [huffmanText, setHuffmanText] = useState("")
   const [hashAlgo, setHashAlgo] = useState("")
   const [collision, setCollision] = useState("")
   const [doubleHash, setDoubleHash] = useState("")
@@ -266,41 +267,51 @@ export default function App() {
     setBusy(true)
     setMessage({ text: `Eliminando "${key}" de ${treeAlgo}…`, tone: "info" })
     
-    if (treeAlgo === "Búsqueda por Residuos Múltiples") {
-      const result = deleteMultiRadixTree(treeData, key)
-      
-      if (result.frames && result.frames.length > 0) {
-        setHashExplanation({ title: treeAlgo, steps: [] })
-        for (let i = 0; i < result.frames.length; i++) {
-          const frame = result.frames[i]
-          setTreeData(frame.treeState)
-          setHashExplanation((prev) => {
-            if (!prev) return null
-            return {
-              title: prev.title,
-              steps: [
-                ...prev.steps,
-                <div key={`tree_step_${i}`} className="mb-2 ml-2 border-l-2 border-[#E6B793] pl-3">
-                  <p className="text-sm text-[#52241A]/80">{frame.description}</p>
-                </div>
-              ]
-            }
-          })
-          await sleep(400)
-        }
+    if (treeAlgo === "Árbol de Huffman") {
+      setMessage({ text: `No se puede borrar claves individuales de un Árbol de Huffman.`, tone: "warn" })
+      setBusy(false)
+      return
+    }
+
+    let result: { newRoot: TreeNode | null; steps: string[]; frames?: any[]; found?: boolean } = { newRoot: null, steps: [] }
+
+    if (treeAlgo === "Búsqueda Digital") {
+      result = deleteDigitalTree(treeData, key)
+    } else if (treeAlgo === "Búsqueda por Residuos") {
+      result = deleteRadixTree(treeData, key)
+    } else if (treeAlgo === "Búsqueda por Residuos Múltiples") {
+      result = deleteMultiRadixTree(treeData, key)
+    }
+
+    if (result.frames && result.frames.length > 0) {
+      setHashExplanation({ title: treeAlgo, steps: [] })
+      for (let i = 0; i < result.frames.length; i++) {
+        const frame = result.frames[i]
+        setTreeData(frame.treeState)
+        setHashExplanation((prev) => {
+          if (!prev) return null
+          return {
+            title: prev.title,
+            steps: [
+              ...prev.steps,
+              <div key={`tree_step_${i}`} className="mb-2 ml-2 border-l-2 border-[#E6B793] pl-3">
+                <p className="text-sm text-[#52241A]/80">{frame.description}</p>
+              </div>
+            ]
+          }
+        })
+        await sleep(400)
       }
-      
-      setTreeData(result.newRoot)
-      if (result.found) {
-        setMessage({ text: `Clave "${key}" eliminada correctamente.`, tone: "ok" })
-        setKeyInput("")
-      } else {
-        setMessage({ text: `La clave "${key}" no se encontró en el árbol.`, tone: "warn" })
-      }
+    }
+    
+    setTreeData(result.newRoot)
+    // Digital and Radix Tree don't explicitly return `found` in their current types in some signatures, but they delete if they reach the leaf. We just check if tree changed, or just say OK.
+    // For Multi Radix, it returns found.
+    if (result.found !== false) {
+      setMessage({ text: `Intentando borrar "${key}" completado.`, tone: "ok" })
+      setKeyInput("")
     } else {
-      setMessage({ text: `Eliminando "${key}" de ${treeAlgo} (no implementado en esta vista aún)…`, tone: "info" })
-      await sleep(1000)
-      setMessage(null)
+      setMessage({ text: `La clave "${key}" no se encontró en el árbol.`, tone: "warn" })
     }
     
     setBusy(false)
@@ -317,43 +328,56 @@ export default function App() {
     setBusy(true)
     setMessage({ text: `Buscando "${key}" en ${treeAlgo}…`, tone: "info" })
     
-    if (treeAlgo === "Búsqueda por Residuos Múltiples") {
-      const result = searchMultiRadixTree(treeData, key)
-      
-      if (result.frames && result.frames.length > 0) {
-        setHashExplanation({ title: treeAlgo, steps: [] })
-        for (let i = 0; i < result.frames.length; i++) {
-          const frame = result.frames[i]
-          setTreeData(frame.treeState)
-          setHashExplanation((prev) => {
-            if (!prev) return null
-            return {
-              title: prev.title,
-              steps: [
-                ...prev.steps,
-                <div key={`tree_step_${i}`} className="mb-2 ml-2 border-l-2 border-[#E6B793] pl-3">
-                  <p className="text-sm text-[#52241A]/80">{frame.description}</p>
-                </div>
-              ]
-            }
-          })
-          await sleep(400)
-        }
-      }
-      
-      if (result.found) {
-        setMessage({ text: `¡La clave "${key}" fue encontrada!`, tone: "ok" })
-      } else {
-        setMessage({ text: `La clave "${key}" no se encuentra en el árbol.`, tone: "warn" })
-      }
-      
-      // Clear visual search state after a delay
-      await sleep(2000)
-      setTreeData(treeData)
-    } else {
-      await sleep(1000)
-      setMessage({ text: "La búsqueda visual en árboles estará disponible pronto.", tone: "info" })
+    if (treeAlgo === "Árbol de Huffman") {
+      setMessage({ text: `No se puede buscar claves individuales en un Árbol de Huffman.`, tone: "warn" })
+      setBusy(false)
+      return
     }
+
+    let result: { steps: string[]; frames?: any[]; found?: boolean } = { steps: [] }
+
+    if (treeAlgo === "Búsqueda Digital") {
+      result = searchDigitalTree(treeData, key)
+    } else if (treeAlgo === "Búsqueda por Residuos") {
+      result = searchRadixTree(treeData, key)
+    } else if (treeAlgo === "Búsqueda por Residuos Múltiples") {
+      result = searchMultiRadixTree(treeData, key)
+    }
+
+    if (result.frames && result.frames.length > 0) {
+      setHashExplanation({ title: treeAlgo, steps: [] })
+      for (let i = 0; i < result.frames.length; i++) {
+        const frame = result.frames[i]
+        setTreeData(frame.treeState)
+        setHashExplanation((prev) => {
+          if (!prev) return null
+          return {
+            title: prev.title,
+            steps: [
+              ...prev.steps,
+              <div key={`tree_step_${i}`} className="mb-2 ml-2 border-l-2 border-[#E6B793] pl-3">
+                <p className="text-sm text-[#52241A]/80">{frame.description}</p>
+              </div>
+            ]
+          }
+        })
+        await sleep(400)
+      }
+    }
+    
+    // Fallback detection logic if `found` wasn't explicitly returned
+    const lastFrame = result.frames && result.frames.length > 0 ? result.frames[result.frames.length - 1] : null;
+    const isFound = result.found !== undefined ? result.found : (lastFrame && lastFrame.description.includes("encontrada"));
+
+    if (isFound) {
+      setMessage({ text: `¡La clave "${key}" fue encontrada!`, tone: "ok" })
+    } else {
+      setMessage({ text: `La clave "${key}" no se encuentra en el árbol.`, tone: "warn" })
+    }
+    
+    // Clear visual search state after a delay
+    await sleep(2000)
+    setTreeData(treeData)
     
     setBusy(false)
   }
@@ -761,7 +785,9 @@ export default function App() {
     } else if (treeAlgo === "Búsqueda por Residuos Múltiples") {
       result = insertMultiRadixTree(treeData, key)
     } else if (treeAlgo === "Árbol de Huffman") {
-      result = buildHuffmanTree(key)
+      const newText = huffmanText + key
+      setHuffmanText(newText)
+      result = buildHuffmanTree(newText)
     }
 
     if (result.logicData) {
@@ -1220,6 +1246,7 @@ export default function App() {
                   setTreeAlgo={setTreeAlgo}
                   clearTree={() => {
                     setTreeData(null)
+                    setHuffmanText("")
                     setMessage(null)
                     setHashExplanation(null)
                   }}
