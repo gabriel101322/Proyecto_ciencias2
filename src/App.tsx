@@ -1,5 +1,5 @@
 import { useState, ReactNode } from "react"
-import { Section, SectionId, Row } from "./types"
+import { Section, SectionId, Row, PendingChange, TreeNode } from "./types"
 import { SECTIONS } from "./constants"
 import {
   computeInitialHash,
@@ -11,9 +11,13 @@ import {
 import Header from "./components/Header"
 import Sidebar from "./components/Sidebar"
 import TableView from "./components/TableView"
+import TreeView from "./components/TreeView"
 import { TopControls, BottomControls } from "./components/Controls"
+import { TopTreeControls, BottomTreeControls } from "./components/TreeControls"
 import HashExplanation from "./components/HashExplanation"
 import ConfirmModal from "./components/ConfirmModal"
+import HuffmanExplanation from "./components/HuffmanExplanation"
+import { insertDigitalTree, insertRadixTree, insertMultiRadixTree, searchMultiRadixTree, deleteMultiRadixTree, buildHuffmanTree } from "./utils/treeUtils"
 
 export default function App() {
   const [collapsed, setCollapsed] = useState(false)
@@ -46,16 +50,17 @@ export default function App() {
     tone: "info" | "ok" | "warn"
   } | null>(null)
   const [busy, setBusy] = useState(false)
-  const [pendingChange, setPendingChange] = useState<{
-    option: string
-    sectionId?: SectionId
-  } | null>(null)
+  const [pendingChange, setPendingChange] = useState<PendingChange | null>(null)
+
+  const [treeData, setTreeData] = useState<TreeNode | null>(null)
+  const [treeAlgo, setTreeAlgo] = useState<string>("Búsqueda Digital")
 
   const current = SECTIONS.find((s) => s.id === activeSection)!
   const isTableView =
     (activeSection === "internas" || activeSection === "externas") &&
-    activeOption !== "Árboles Binarios"
+    activeOption !== "Árboles de Búsqueda"
   const isHash = activeOption === "Transformaciones de Claves"
+  const isTree = activeOption === "Árboles de Búsqueda"
 
   const triggerRehash = (algo: string, coll: string, double: string) => {
     if (!algo || !coll || (coll === "Doble Función Hash" && !double)) return
@@ -92,61 +97,83 @@ export default function App() {
     )
       return
 
+    requestChange({ type: "section", option: newOption, sectionId: newSectionId })
+  }
+
+  const requestChange = (change: PendingChange) => {
     if (rows && rows.length > 0) {
-      setPendingChange({ option: newOption, sectionId: newSectionId })
+      setPendingChange(change)
     } else {
-      applyChange(newOption, newSectionId, false)
+      applyChange(change, false)
     }
   }
 
   const applyChange = (
-    option: string,
-    sectionId: SectionId | undefined,
+    change: PendingChange,
     keepArray: boolean
   ) => {
-    if (!keepArray) {
-      setRows(null)
-      setArraySizeInput("")
-    } else if (rows) {
-      const allKeys: string[] = []
-      rows.forEach((r) => {
-        if (r.key) {
-          r.key.split(/, | -> /).forEach((kStr) => {
-            const k = kStr.trim()
-            if (k) {
-              allKeys.push(k)
-            }
-          })
+    if (change.type === "section") {
+      if (!keepArray) {
+        setRows(null)
+        setArraySizeInput("")
+      } else if (rows) {
+        const allKeys: string[] = []
+        rows.forEach((r) => {
+          if (r.key) {
+            r.key.split(/, | -> /).forEach((kStr) => {
+              const k = kStr.trim()
+              if (k) {
+                allKeys.push(k)
+              }
+            })
+          }
+        })
+
+        if (change.option === "Binaria") {
+          allKeys.sort((a, b) => parseInt(a, 10) - parseInt(b, 10))
         }
-      })
 
-      if (option === "Binaria") {
-        allKeys.sort((a, b) => parseInt(a, 10) - parseInt(b, 10))
+        const newRows = rows.map((r) => ({ ...r, inactive: false, key: "" }))
+        for (let i = 0; i < Math.min(allKeys.length, newRows.length); i++) {
+          newRows[i].key = allKeys[i]
+        }
+        setRows(newRows)
       }
 
-      const newRows = rows.map((r) => ({ ...r, inactive: false, key: "" }))
-      for (let i = 0; i < Math.min(allKeys.length, newRows.length); i++) {
-        newRows[i].key = allKeys[i]
+      if (change.option === "Transformaciones de Claves") {
+        setHashAlgo("")
+        setCollision("")
+        setDoubleHash("")
+        setHashExplanation(null)
+      } else if (change.option === "Árboles de Búsqueda") {
+        setTreeData(null)
+        setTreeAlgo("Búsqueda Digital")
+        setHashExplanation(null)
+      } else {
+        setHashExplanation(null)
       }
-      setRows(newRows)
+
+      if (change.sectionId) {
+        setActiveSection(change.sectionId)
+      }
+      setActiveOption(change.option)
+      setPendingChange(null)
+      setMessage(null)
+      setActive(null)
+      setCollisionOpen(false)
+    } else if (change.type === "hashAlgo") {
+      setHashAlgo(change.algo)
+      if (keepArray) triggerRehash(change.algo, collision, doubleHash)
+      setPendingChange(null)
+    } else if (change.type === "collision") {
+      setCollision(change.coll)
+      if (change.double) setDoubleHash(change.double)
+      if (keepArray) triggerRehash(hashAlgo, change.coll, change.double || doubleHash)
+      setPendingChange(null)
     }
-
-    if (option === "Transformaciones de Claves") {
-      setHashAlgo("")
-      setCollision("")
-      setDoubleHash("")
-      setHashExplanation(null)
-    } else {
-      setHashExplanation(null)
-    }
-
-    setActive(null)
-    setMessage(null)
-    setPendingChange(null)
-
-    if (sectionId) setActiveSection(sectionId)
-    setActiveOption(option)
   }
+
+  const cancelChange = () => setPendingChange(null)
 
   const selectSection = (section: Section) => {
     handleAlgorithmChange(section.options[0], section.id)
@@ -224,6 +251,110 @@ export default function App() {
       tone: "warn",
     })
     setActive(null)
+    setBusy(false)
+    setKeyInput("")
+  }
+
+  const deleteKeyFromTree = async () => {
+    if (!treeData || busy) return
+    const key = keyInput.trim().toUpperCase()
+    if (!key) {
+      setMessage({ text: "Escribe la clave que deseas borrar.", tone: "warn" })
+      return
+    }
+
+    setBusy(true)
+    setMessage({ text: `Eliminando "${key}" de ${treeAlgo}…`, tone: "info" })
+    
+    if (treeAlgo === "Búsqueda por Residuos Múltiples") {
+      const result = deleteMultiRadixTree(treeData, key)
+      
+      if (result.frames && result.frames.length > 0) {
+        setHashExplanation({ title: treeAlgo, steps: [] })
+        for (let i = 0; i < result.frames.length; i++) {
+          const frame = result.frames[i]
+          setTreeData(frame.treeState)
+          setHashExplanation((prev) => {
+            if (!prev) return null
+            return {
+              title: prev.title,
+              steps: [
+                ...prev.steps,
+                <div key={`tree_step_${i}`} className="mb-2 ml-2 border-l-2 border-[#E6B793] pl-3">
+                  <p className="text-sm text-[#52241A]/80">{frame.description}</p>
+                </div>
+              ]
+            }
+          })
+          await sleep(400)
+        }
+      }
+      
+      setTreeData(result.newRoot)
+      if (result.found) {
+        setMessage({ text: `Clave "${key}" eliminada correctamente.`, tone: "ok" })
+        setKeyInput("")
+      } else {
+        setMessage({ text: `La clave "${key}" no se encontró en el árbol.`, tone: "warn" })
+      }
+    } else {
+      setMessage({ text: `Eliminando "${key}" de ${treeAlgo} (no implementado en esta vista aún)…`, tone: "info" })
+      await sleep(1000)
+      setMessage(null)
+    }
+    
+    setBusy(false)
+  }
+
+  const handleTreeSearch = async () => {
+    if (busy || !treeData) return
+    const key = searchInput.trim()
+    if (!key) {
+      setMessage({ text: "Escribe una clave para buscar.", tone: "warn" })
+      return
+    }
+
+    setBusy(true)
+    setMessage({ text: `Buscando "${key}" en ${treeAlgo}…`, tone: "info" })
+    
+    if (treeAlgo === "Búsqueda por Residuos Múltiples") {
+      const result = searchMultiRadixTree(treeData, key)
+      
+      if (result.frames && result.frames.length > 0) {
+        setHashExplanation({ title: treeAlgo, steps: [] })
+        for (let i = 0; i < result.frames.length; i++) {
+          const frame = result.frames[i]
+          setTreeData(frame.treeState)
+          setHashExplanation((prev) => {
+            if (!prev) return null
+            return {
+              title: prev.title,
+              steps: [
+                ...prev.steps,
+                <div key={`tree_step_${i}`} className="mb-2 ml-2 border-l-2 border-[#E6B793] pl-3">
+                  <p className="text-sm text-[#52241A]/80">{frame.description}</p>
+                </div>
+              ]
+            }
+          })
+          await sleep(400)
+        }
+      }
+      
+      if (result.found) {
+        setMessage({ text: `¡La clave "${key}" fue encontrada!`, tone: "ok" })
+      } else {
+        setMessage({ text: `La clave "${key}" no se encuentra en el árbol.`, tone: "warn" })
+      }
+      
+      // Clear visual search state after a delay
+      await sleep(2000)
+      setTreeData(treeData)
+    } else {
+      await sleep(1000)
+      setMessage({ text: "La búsqueda visual en árboles estará disponible pronto.", tone: "info" })
+    }
+    
     setBusy(false)
   }
 
@@ -411,12 +542,9 @@ export default function App() {
       }
 
       if (currentRow.key === "") {
-        // Encontramos un hueco, así que la clave definitivamente no está
         break
       }
 
-      // Si no es un método de colisión secuencial (como Lista Enlazada o Anidado), 
-      // y no la encontramos en sus parts, entonces la clave no está.
       if (collision === "Lista Enlazada" || collision === "Arreglo Anidado") {
          break
       }
@@ -609,6 +737,73 @@ export default function App() {
       tone: "warn",
     })
     setActive(null)
+    setBusy(false)
+  }
+
+  const insertKeyToTree = async () => {
+    if (busy) return
+    const key = keyInput.trim()
+    if (!key) {
+      setMessage({ text: "Escribe la clave que deseas insertar.", tone: "warn" })
+      return
+    }
+
+    setBusy(true)
+    setMessage({ text: `Insertando "${key}" en ${treeAlgo}…`, tone: "info" })
+    
+    // @ts-ignore - frames will be checked dynamically
+    let result: { newRoot: TreeNode | null; steps: string[]; frames?: any[]; logicData?: any } = { newRoot: null, steps: [] }
+
+    if (treeAlgo === "Búsqueda Digital") {
+      result = insertDigitalTree(treeData, key)
+    } else if (treeAlgo === "Búsqueda por Residuos") {
+      result = insertRadixTree(treeData, key)
+    } else if (treeAlgo === "Búsqueda por Residuos Múltiples") {
+      result = insertMultiRadixTree(treeData, key)
+    } else if (treeAlgo === "Árbol de Huffman") {
+      result = buildHuffmanTree(key)
+    }
+
+    if (result.logicData) {
+      setTreeData(result.newRoot)
+      setHashExplanation({
+        title: treeAlgo,
+        steps: [<HuffmanExplanation key="huffman" data={result.logicData} />]
+      })
+    } else if (result.frames && result.frames.length > 0) {
+      setHashExplanation({ title: treeAlgo, steps: [] })
+      for (let i = 0; i < result.frames.length; i++) {
+        const frame = result.frames[i]
+        setTreeData(frame.treeState)
+        setHashExplanation((prev) => {
+          if (!prev) return null
+          return {
+            title: prev.title,
+            steps: [
+              ...prev.steps,
+              <div key={`tree_step_${i}`} className="mb-2 ml-2 border-l-2 border-[#E6B793] pl-3">
+                <p className="text-sm text-[#52241A]/80">{frame.description}</p>
+              </div>
+            ]
+          }
+        })
+        await sleep(400)
+      }
+      setTreeData(result.newRoot)
+    } else {
+      setTreeData(result.newRoot)
+      setHashExplanation({ 
+        title: treeAlgo, 
+        steps: result.steps.map((s,i) => (
+          <div key={`tree_step_${i}`} className="mb-2 ml-2 border-l-2 border-[#E6B793] pl-3">
+            <p className="text-sm text-[#52241A]/80">{s}</p>
+          </div>
+        )) 
+      })
+    }
+    
+    setMessage({ text: `Operación completada en ${treeAlgo}.`, tone: "ok" })
+    if (treeAlgo !== "Árbol de Huffman") setKeyInput("")
     setBusy(false)
   }
 
@@ -884,12 +1079,38 @@ export default function App() {
     if (busy || !rows) return
     const min = Math.pow(10, keySize - 1)
     const max = Math.pow(10, keySize) - 1
+
+    const existingKeys = new Set<string>()
+    rows.forEach((r) => {
+      if (r.key) {
+        r.key.split(/, | -> /).forEach((k) => existingKeys.add(k.trim()))
+      }
+      if (r.collidingKey) {
+        existingKeys.add(r.collidingKey.trim())
+      }
+    })
+
     let randStr = ""
-    if (keySize === 1) {
-      randStr = Math.floor(Math.random() * 10).toString()
-    } else {
-      randStr = Math.floor(Math.random() * (max - min + 1) + min).toString()
+    let attempts = 0
+    const maxAttempts = 500
+
+    do {
+      if (keySize === 1) {
+        randStr = Math.floor(Math.random() * 10).toString()
+      } else {
+        randStr = Math.floor(Math.random() * (max - min + 1) + min).toString()
+      }
+      attempts++
+    } while (existingKeys.has(randStr) && attempts < maxAttempts)
+
+    if (existingKeys.has(randStr)) {
+      setMessage({
+        text: "No se pudo generar una clave única. Intenta aumentar el tamaño de la clave.",
+        tone: "warn",
+      })
+      return
     }
+
     setKeyInput(randStr)
     if (isHash) {
       insertHash(randStr)
@@ -977,7 +1198,7 @@ export default function App() {
         />
 
         <main className="min-w-0 overflow-auto bg-[#faf6f2] p-8">
-          {!isTableView ? (
+          {!(isTableView || isTree) ? (
             <div className="mx-auto flex h-full max-w-4xl flex-col items-center justify-center rounded-2xl border border-dashed border-[#52241A]/15 text-center">
               <p className="text-[13px] font-semibold uppercase tracking-[0.3em] text-[#52241A]/40">
                 {current.label}
@@ -991,59 +1212,91 @@ export default function App() {
             </div>
           ) : (
             <div className="mx-auto flex h-full max-w-6xl flex-col gap-5">
-              <TopControls
-                isHash={isHash}
-                hasData={hasData}
-                busy={busy}
-                keySize={keySize}
-                setKeySize={setKeySize}
-                arraySizeInput={arraySizeInput}
-                setArraySizeInput={setArraySizeInput}
-                hashAlgo={hashAlgo}
-                setHashAlgo={setHashAlgo}
-                collision={collision}
-                doubleHash={doubleHash}
-                triggerRehash={triggerRehash}
-                generateTable={generateTable}
-                clearTable={() => {
-                  setRows(null)
-                  setActive(null)
-                  setMessage(null)
-                }}
-              />
+              {isTree ? (
+                <TopTreeControls
+                  hasData={!!treeData}
+                  busy={busy}
+                  treeAlgo={treeAlgo}
+                  setTreeAlgo={setTreeAlgo}
+                  clearTree={() => {
+                    setTreeData(null)
+                    setMessage(null)
+                    setHashExplanation(null)
+                  }}
+                />
+              ) : (
+                <TopControls
+                  isHash={isHash}
+                  hasData={!!rows && rows.length > 0}
+                  busy={busy}
+                  keySize={keySize}
+                  setKeySize={setKeySize}
+                  arraySizeInput={arraySizeInput}
+                  setArraySizeInput={setArraySizeInput}
+                  hashAlgo={hashAlgo}
+                  requestChange={requestChange}
+                  collision={collision}
+                  doubleHash={doubleHash}
+                  triggerRehash={triggerRehash}
+                  generateTable={generateTable}
+                  clearTable={() => {
+                    setRows(null)
+                    setActive(null)
+                    setMessage(null)
+                  }}
+                />
+              )}
 
               <div className="min-h-0 flex-1 flex gap-4">
-                <TableView rows={rows} active={active} isHash={isHash} />
+                {isTree ? (
+                  <TreeView treeData={treeData} />
+                ) : (
+                  <TableView rows={rows} active={active} isHash={isHash} collision={collision} />
+                )}
 
                 <HashExplanation
-                  isHash={isHash}
+                  isHash={isHash || isTree}
                   hashExplanation={hashExplanation}
                 />
               </div>
 
-              <BottomControls
-                isHash={isHash}
-                busy={busy}
-                hasRows={rows !== null}
-                keyInput={keyInput}
-                setKeyInput={setKeyInput}
-                searchInput={searchInput}
-                setSearchInput={setSearchInput}
-                insertHash={() => insertHash()}
-                insertSequential={() => insertSequential()}
-                insertAuto={insertAuto}
-                deleteSequential={deleteSequential}
-                handleSearch={handleSearch}
-                sortArray={sortArray}
-                hashAlgo={hashAlgo}
-                collision={collision}
-                setCollision={setCollision}
-                doubleHash={doubleHash}
-                setDoubleHash={setDoubleHash}
-                collisionOpen={collisionOpen}
-                setCollisionOpen={setCollisionOpen}
-                triggerRehash={triggerRehash}
-              />
+              {isTree ? (
+                <BottomTreeControls
+                  busy={busy}
+                  hasData={!!treeData}
+                  treeAlgo={treeAlgo}
+                  keyInput={keyInput}
+                  setKeyInput={setKeyInput}
+                  searchInput={searchInput}
+                  setSearchInput={setSearchInput}
+                  insertKey={insertKeyToTree}
+                  deleteKey={deleteKeyFromTree}
+                  searchKey={handleTreeSearch}
+                />
+              ) : (
+                <BottomControls
+                  isHash={isHash}
+                  busy={busy}
+                  hasRows={!!rows && rows.length > 0}
+                  keyInput={keyInput}
+                  setKeyInput={setKeyInput}
+                  searchInput={searchInput}
+                  setSearchInput={setSearchInput}
+                  insertHash={() => insertHash()}
+                  insertSequential={() => insertSequential()}
+                  insertAuto={insertAuto}
+                  deleteSequential={deleteSequential}
+                  handleSearch={isHash ? searchHash : handleSearch}
+                  sortArray={sortArray}
+                  hashAlgo={hashAlgo}
+                  collision={collision}
+                  requestChange={requestChange}
+                  doubleHash={doubleHash}
+                  collisionOpen={collisionOpen}
+                  setCollisionOpen={setCollisionOpen}
+                  triggerRehash={triggerRehash}
+                />
+              )}
 
               {message && (
                 <div
@@ -1072,7 +1325,7 @@ export default function App() {
         </main>
       </div>
 
-      <ConfirmModal pendingChange={pendingChange} applyChange={applyChange} />
+      <ConfirmModal pendingChange={pendingChange} applyChange={applyChange} cancelChange={cancelChange} />
     </div>
   )
 }

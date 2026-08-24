@@ -9,11 +9,12 @@ type TableViewProps = {
     subIndex?: number
   } | null
   isHash: boolean
+  collision: string
 }
 
 type DisplayItem = { type: "row"; data: Row } | { type: "ellipsis"; id: string }
 
-export default function TableView({ rows, active, isHash }: TableViewProps) {
+export default function TableView({ rows, active, isHash, collision }: TableViewProps) {
   useEffect(() => {
     if (active?.pos) {
       const el = document.getElementById(`row-${active.pos}`)
@@ -86,8 +87,9 @@ export default function TableView({ rows, active, isHash }: TableViewProps) {
     rightRows = processColumn(rightCol, "R")
   }
 
+  const isLinkedList = collision === "Lista Enlazada"
   let maxCols = 1
-  if (rows) {
+  if (rows && !isLinkedList) {
     rows.forEach((r) => {
       if (r.key) {
         const parts = r.key.split(/, | -> /)
@@ -183,51 +185,102 @@ export default function TableView({ rows, active, isHash }: TableViewProps) {
                       >
                         {row.pos}
                       </td>
-                      {Array.from({ length: maxCols }).map((_, colIdx) => {
-                        const cellKey = parts[colIdx]
-                        const isResolvingHere =
-                          row.collidingKey && colIdx === parts.length
-
-                        return (
-                          <td
-                            key={colIdx}
-                            className={`border-b border-[#52241A]/10 px-4 py-2 ${
-                              act ? "" : "text-[#2b1610]"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              {isLinked && colIdx > 0 && (cellKey || isResolvingHere) && (
-                                <span className="text-[#52241A]/40 text-sm font-light">
-                                  →
-                                </span>
-                              )}
-                              {cellKey ? (
-                                <span
-                                  className={
-                                    act === "match" && active?.subIndex === colIdx
-                                      ? "inline-block motion-safe:animate-[pulse_1.5s_ease-in-out_infinite] scale-110 font-bold text-white bg-[#1b4b2f] px-2.5 py-1 rounded-md shadow-lg transition-all duration-300 ring-2 ring-white"
-                                      : ""
-                                  }
-                                >
-                                  {cellKey}
-                                </span>
-                              ) : isResolvingHere ? (
-                                <span className="inline-flex items-center justify-center rounded bg-[#a23b2a] px-2 py-0.5 text-[12px] font-medium text-white shadow-sm motion-safe:animate-bounce">
+                      {isLinkedList ? (
+                        <td
+                          className={`border-b border-[#52241A]/10 px-4 py-2 ${
+                            act ? "" : "text-[#2b1610]"
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {row.key ? (
+                              parts.map((k, idx, arr) => {
+                                const isMain = idx === 0
+                                return (
+                                  <div key={idx} className="flex items-center gap-1.5 shrink-0">
+                                    <span
+                                      className={`inline-block min-w-[3.5rem] text-center rounded px-2 py-0.5 text-[13px] font-medium border transition-all ${
+                                        act === "match" && active?.subIndex === idx
+                                          ? "motion-safe:animate-[pulse_1.5s_ease-in-out_infinite] scale-110 font-bold text-white bg-[#1b4b2f] shadow-lg ring-2 ring-white"
+                                          : isMain
+                                          ? "border-[#52241A]/20 bg-[#faf6f2]/80"
+                                          : "border-[#E6B793] bg-[#E6B793]/20 text-[#52241A]"
+                                      }`}
+                                    >
+                                      {k}
+                                    </span>
+                                    {idx < arr.length - 1 && (
+                                      <span className="text-[#52241A]/40 text-sm">
+                                        →
+                                      </span>
+                                    )}
+                                  </div>
+                                )
+                              })
+                            ) : (
+                              <span
+                                className={
+                                  act ? "opacity-60" : "text-[#52241A]/25"
+                                }
+                              >
+                                —
+                              </span>
+                            )}
+                            {row.collidingKey && (
+                              <div className="flex items-center gap-1.5 ml-1 shrink-0">
+                                {row.key && (
+                                  <span className="text-[#52241A]/40 text-sm">
+                                    →
+                                  </span>
+                                )}
+                                <span className="inline-flex min-w-[3.5rem] justify-center items-center rounded bg-[#a23b2a] px-2 py-0.5 text-[13px] font-medium text-white shadow-sm motion-safe:animate-bounce">
                                   {row.collidingKey}
                                 </span>
-                              ) : (
-                                <span
-                                  className={
-                                    act ? "opacity-60" : "text-[#52241A]/25"
-                                  }
-                                >
-                                  —
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                        )
-                      })}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      ) : (
+                        Array.from({ length: maxCols }).map((_, colIdx) => {
+                          const cellKey = parts[colIdx]
+                          const isResolvingHere =
+                            row.collidingKey && colIdx === parts.length
+
+                          return (
+                            <td
+                              key={colIdx}
+                              className={`border-b border-[#52241A]/10 px-4 py-2 ${
+                                act ? "" : "text-[#2b1610]"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                {cellKey ? (
+                                  <span
+                                    className={
+                                      act === "match" && active?.subIndex === colIdx
+                                        ? "inline-block motion-safe:animate-[pulse_1.5s_ease-in-out_infinite] scale-110 font-bold text-white bg-[#1b4b2f] px-2.5 py-1 rounded-md shadow-lg transition-all duration-300 ring-2 ring-white"
+                                        : ""
+                                    }
+                                  >
+                                    {cellKey}
+                                  </span>
+                                ) : isResolvingHere ? (
+                                  <span className="inline-flex items-center justify-center rounded bg-[#a23b2a] px-2 py-0.5 text-[12px] font-medium text-white shadow-sm motion-safe:animate-bounce">
+                                    {row.collidingKey}
+                                  </span>
+                                ) : (
+                                  <span
+                                    className={
+                                      act ? "opacity-60" : "text-[#52241A]/25"
+                                    }
+                                  >
+                                    —
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          )
+                        })
+                      )}
                     </tr>
                   )
                 })}
