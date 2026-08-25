@@ -10,11 +10,13 @@ type TableViewProps = {
   } | null
   isHash: boolean
   collision: string
+  isBlockMode?: boolean
+  blockSize?: number
 }
 
 type DisplayItem = { type: "row"; data: Row } | { type: "ellipsis"; id: string }
 
-export default function TableView({ rows, active, isHash, collision }: TableViewProps) {
+export default function TableView({ rows, active, isHash, collision, isBlockMode, blockSize }: TableViewProps) {
   useEffect(() => {
     if (active?.pos) {
       const el = document.getElementById(`row-${active.pos}`)
@@ -166,20 +168,28 @@ export default function TableView({ rows, active, isHash, collision }: TableView
                     rowClass =
                       "opacity-20 bg-[#2b1610]/15 grayscale blur-[0.5px] select-none pointer-events-none"
                   } else {
-                    rowClass = "odd:bg-[#faf6f2]/60 hover:bg-[#E6B793]/20"
+                    if (isBlockMode && blockSize && blockSize > 0) {
+                      const blockIndex = Math.floor((row.pos - 1) / blockSize)
+                      rowClass = blockIndex % 2 === 0 ? "bg-[#faf6f2]/80 hover:bg-[#E6B793]/20" : "bg-white hover:bg-[#E6B793]/20"
+                    } else {
+                      rowClass = "odd:bg-[#faf6f2]/60 hover:bg-[#E6B793]/20"
+                    }
                   }
 
                   const parts = row.key ? row.key.split(/, | -> /) : []
                   const isLinked = row.key && row.key.includes("->")
+                  
+                  const isBlockEnd = isBlockMode && blockSize && blockSize > 0 && row.pos % blockSize === 0
+                  const tdClassBase = isBlockEnd ? "border-b-[3px] border-[#52241A]/40" : "border-b border-[#52241A]/10"
 
                   return (
                     <tr
                       id={`row-${row.pos}`}
                       key={`row_${row.pos}`}
-                      className={`transition-all duration-500 ${rowClass}`}
+                      className={`transition-all duration-500 ${rowClass} ${isBlockEnd ? "shadow-[0_2px_4px_-1px_rgba(82,36,26,0.1)] relative z-10" : ""}`}
                     >
                       <td
-                        className={`border-b border-[#52241A]/10 px-4 py-2 font-medium tabular-nums ${
+                        className={`${tdClassBase} px-4 py-2 font-medium tabular-nums ${
                           act ? "" : "text-[#52241A]"
                         }`}
                       >
@@ -187,7 +197,7 @@ export default function TableView({ rows, active, isHash, collision }: TableView
                       </td>
                       {isLinkedList ? (
                         <td
-                          className={`border-b border-[#52241A]/10 px-4 py-2 ${
+                          className={`${tdClassBase} px-4 py-2 ${
                             act ? "" : "text-[#2b1610]"
                           }`}
                         >
@@ -248,7 +258,7 @@ export default function TableView({ rows, active, isHash, collision }: TableView
                           return (
                             <td
                               key={colIdx}
-                              className={`border-b border-[#52241A]/10 px-4 py-2 ${
+                              className={`${tdClassBase} px-4 py-2 ${
                                 act ? "" : "text-[#2b1610]"
                               }`}
                             >

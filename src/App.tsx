@@ -1,4 +1,4 @@
-import { useState, ReactNode } from "react"
+import { useState, useEffect, ReactNode } from "react"
 import { Section, SectionId, Row, PendingChange, TreeNode } from "./types"
 import { SECTIONS } from "./constants"
 import {
@@ -19,10 +19,41 @@ import ConfirmModal from "./components/ConfirmModal"
 import HuffmanExplanation from "./components/HuffmanExplanation"
 import { insertDigitalTree, searchDigitalTree, deleteDigitalTree, insertRadixTree, searchRadixTree, deleteRadixTree, insertMultiRadixTree, searchMultiRadixTree, deleteMultiRadixTree, buildHuffmanTree } from "./utils/treeUtils"
 
+type SavedStructure = {
+  id: string
+  name: string
+  timestamp: number
+  activeSection: SectionId
+  activeOption: string
+  keySize: number
+  rows: Row[] | null
+  hashAlgo: string
+  collision: string
+  doubleHash: string
+  treeData: TreeNode | null
+  treeAlgo: string
+  huffmanText: string
+}
+
 export default function App() {
   const [collapsed, setCollapsed] = useState(false)
   const [activeSection, setActiveSection] = useState<SectionId>("internas")
   const [activeOption, setActiveOption] = useState<string>("Secuencial")
+  
+  // Guardar y Cargar Estructuras
+  const [saveModalOpen, setSaveModalOpen] = useState(false)
+  const [loadModalOpen, setLoadModalOpen] = useState(false)
+  const [saveName, setSaveName] = useState("")
+  const [savedStructures, setSavedStructures] = useState<SavedStructure[]>([])
+
+  useEffect(() => {
+    const loaded = localStorage.getItem("saved_structures")
+    if (loaded) {
+      try {
+        setSavedStructures(JSON.parse(loaded))
+      } catch (e) {}
+    }
+  }, [])
 
   // ── Estado de la tabla ──────────────────────────────
   const [keySize, setKeySize] = useState(1)
@@ -62,21 +93,23 @@ export default function App() {
     activeOption !== "Árboles de Búsqueda"
   const isHash = activeOption === "Transformaciones de Claves"
   const isTree = activeOption === "Árboles de Búsqueda"
+  const isBlockMode = activeSection === "externas"
+  const currentBlockSize = rows && isBlockMode ? Math.max(1, Math.floor(Math.sqrt(rows.filter(r => r.key !== "").length))) : 0
 
   const triggerRehash = (algo: string, coll: string, double: string) => {
     if (!algo || !coll || (coll === "Doble Función Hash" && !double)) return
-    
+
     const summarySteps = [
       <div key="rehash_summary" className="mb-4">
         <p className="mb-1 font-semibold text-[#52241A]">Resumen de Rehasheo</p>
         <p className="text-sm text-[#52241A]/80 ml-2">
           La tabla ha sido reubicada instantáneamente usando <strong>{algo}</strong>.
-          <br/>Resolución de colisiones: <strong>{coll}</strong>
+          <br />Resolución de colisiones: <strong>{coll}</strong>
           {coll === "Doble Función Hash" && double ? ` (${double})` : ""}.
         </p>
       </div>
     ]
-    
+
     setHashExplanation({
       title: `Algoritmo: ${algo}`,
       steps: summarySteps,
@@ -86,6 +119,59 @@ export default function App() {
       if (!prev || prev.length === 0) return prev
       return rehashInstantly(prev, algo, coll, double)
     })
+  }
+
+  const handleSaveStructure = () => {
+    if (!saveName.trim()) {
+      setMessage({ text: "Debes ingresar un nombre para guardar la estructura.", tone: "warn" })
+      return
+    }
+
+    const newStruct: SavedStructure = {
+      id: Date.now().toString(),
+      name: saveName.trim(),
+      timestamp: Date.now(),
+      activeSection,
+      activeOption,
+      keySize,
+      rows,
+      hashAlgo,
+      collision,
+      doubleHash,
+      treeData,
+      treeAlgo,
+      huffmanText,
+    }
+    const updated = [...savedStructures, newStruct]
+    setSavedStructures(updated)
+    localStorage.setItem("saved_structures", JSON.stringify(updated))
+    setSaveModalOpen(false)
+    setSaveName("")
+    setMessage({ text: `Estructura "${newStruct.name}" guardada exitosamente.`, tone: "ok" })
+  }
+
+  const handleLoadStructure = (struct: SavedStructure) => {
+    setActiveSection(struct.activeSection)
+    setActiveOption(struct.activeOption)
+    setKeySize(struct.keySize ?? 1)
+    setRows(struct.rows)
+    setHashAlgo(struct.hashAlgo || "")
+    setCollision(struct.collision || "")
+    setDoubleHash(struct.doubleHash || "")
+    setTreeData(struct.treeData)
+    setTreeAlgo(struct.treeAlgo || "Búsqueda Digital")
+    setHuffmanText(struct.huffmanText || "")
+    setArraySizeInput(struct.rows ? struct.rows.length.toString() : "")
+    setLoadModalOpen(false)
+    setActive(null)
+    setHashExplanation(null)
+    setMessage({ text: `Estructura "${struct.name}" cargada exitosamente.`, tone: "ok" })
+  }
+
+  const handleDeleteSaved = (id: string) => {
+    const updated = savedStructures.filter(s => s.id !== id)
+    setSavedStructures(updated)
+    localStorage.setItem("saved_structures", JSON.stringify(updated))
   }
 
   const handleAlgorithmChange = (
@@ -130,7 +216,7 @@ export default function App() {
           }
         })
 
-        if (change.option === "Binaria") {
+        if (change.option === "Binaria" || (change.option === "Secuencial" && (change.sectionId || activeSection) === "externas")) {
           allKeys.sort((a, b) => parseInt(a, 10) - parseInt(b, 10))
         }
 
@@ -266,7 +352,7 @@ export default function App() {
 
     setBusy(true)
     setMessage({ text: `Eliminando "${key}" de ${treeAlgo}…`, tone: "info" })
-    
+
     if (treeAlgo === "Árbol de Huffman") {
       setMessage({ text: `No se puede borrar claves individuales de un Árbol de Huffman.`, tone: "warn" })
       setBusy(false)
@@ -303,7 +389,7 @@ export default function App() {
         await sleep(400)
       }
     }
-    
+
     setTreeData(result.newRoot)
     // Digital and Radix Tree don't explicitly return `found` in their current types in some signatures, but they delete if they reach the leaf. We just check if tree changed, or just say OK.
     // For Multi Radix, it returns found.
@@ -313,7 +399,7 @@ export default function App() {
     } else {
       setMessage({ text: `La clave "${key}" no se encontró en el árbol.`, tone: "warn" })
     }
-    
+
     setBusy(false)
   }
 
@@ -327,7 +413,7 @@ export default function App() {
 
     setBusy(true)
     setMessage({ text: `Buscando "${key}" en ${treeAlgo}…`, tone: "info" })
-    
+
     if (treeAlgo === "Árbol de Huffman") {
       setMessage({ text: `No se puede buscar claves individuales en un Árbol de Huffman.`, tone: "warn" })
       setBusy(false)
@@ -364,7 +450,7 @@ export default function App() {
         await sleep(400)
       }
     }
-    
+
     // Fallback detection logic if `found` wasn't explicitly returned
     const lastFrame = result.frames && result.frames.length > 0 ? result.frames[result.frames.length - 1] : null;
     const isFound = result.found !== undefined ? result.found : (lastFrame && lastFrame.description.includes("encontrada"));
@@ -374,11 +460,11 @@ export default function App() {
     } else {
       setMessage({ text: `La clave "${key}" no se encuentra en el árbol.`, tone: "warn" })
     }
-    
+
     // Clear visual search state after a delay
     await sleep(2000)
     setTreeData(treeData)
-    
+
     setBusy(false)
   }
 
@@ -386,9 +472,17 @@ export default function App() {
     if (rows) setRows(rows.map((r) => ({ ...r, inactive: false })))
 
     if (isHash) {
+      // Búsqueda Externa con Transformación de Claves es análoga a la interna,
+      // donde cada "posición" actúa como un bucket/bloque en disco.
       searchHash()
     } else if (activeOption === "Binaria") {
-      searchBinary()
+      if (activeSection === "externas") {
+        searchExternalBinary()
+      } else {
+        searchBinary()
+      }
+    } else if (activeSection === "externas" && activeOption === "Secuencial") {
+      searchBlock()
     } else {
       searchSequential()
     }
@@ -431,6 +525,121 @@ export default function App() {
     setBusy(false)
   }
 
+  const searchBlock = async () => {
+    if (busy || !rows) return
+    const key = searchInput.trim()
+    if (!key) {
+      setMessage({ text: "Escribe una clave para buscar.", tone: "warn" })
+      return
+    }
+
+    const targetVal = parseInt(key, 10)
+    if (isNaN(targetVal)) return
+
+    let isSorted = true
+    let previousValue = -Infinity
+    const filledRows = rows.filter((r) => r.key !== "")
+
+    if (filledRows.length === 0) {
+      setMessage({ text: "El arreglo está vacío.", tone: "warn" })
+      return
+    }
+
+    for (const row of filledRows) {
+      const val = parseInt(row.key, 10)
+      if (val < previousValue) {
+        isSorted = false
+        break
+      }
+      previousValue = val
+    }
+
+    if (!isSorted) {
+      setMessage({
+        text: "Error: El arreglo DEBE estar ordenado para usar Búsqueda por Bloques.",
+        tone: "warn",
+      })
+      return
+    }
+
+    setBusy(true)
+    setMessage({ text: `Calculando tamaño de bloque...`, tone: "info" })
+
+    const n = filledRows.length
+    const blockSize = Math.floor(Math.sqrt(n))
+
+    setMessage({ text: `Fórmula: m = √n. Tamaño de bloque óptimo calculado: √${n} ≈ ${blockSize}`, tone: "info" })
+    await sleep(1500)
+
+    let currentRows = rows.map((r) => ({ ...r, inactive: false }))
+    let step = blockSize
+    let prev = 0
+
+    // Saltos de bloque
+    while (prev < n) {
+      const checkIndex = Math.min(step, n) - 1
+      const checkVal = parseInt(filledRows[checkIndex].key, 10)
+
+      setMessage({ text: `Evaluando fin del bloque en la posición ${filledRows[checkIndex].pos} (valor: ${checkVal})`, tone: "info" })
+      setActive({ pos: filledRows[checkIndex].pos, state: "compare" })
+      await sleep(1000)
+
+      if (checkVal >= targetVal) {
+        // Encontramos el bloque donde podría estar
+        setMessage({ text: `El valor buscado (${targetVal}) es menor o igual a ${checkVal}, se buscará secuencialmente en este bloque.`, tone: "info" })
+        await sleep(1500)
+        break
+      }
+
+      // Marcar bloque anterior como inactivo (no coincide)
+      for (let i = prev; i <= checkIndex; i++) {
+        const globalIndex = currentRows.findIndex(r => r.pos === filledRows[i].pos)
+        if (globalIndex !== -1) currentRows[globalIndex].inactive = true
+      }
+      setRows([...currentRows])
+
+      prev = step
+      step += blockSize
+    }
+
+    // Busqueda secuencial en el bloque encontrado
+    const endBound = Math.min(step, n)
+    if (prev < n) {
+      setMessage({ text: `Búsqueda secuencial dentro del bloque (Posición ${filledRows[prev].pos} a ${filledRows[endBound - 1]?.pos})`, tone: "info" })
+      await sleep(1500)
+    }
+
+    let found = false
+    for (let i = prev; i < endBound; i++) {
+      setActive({ pos: filledRows[i].pos, state: "compare" })
+      await sleep(600)
+
+      const val = parseInt(filledRows[i].key, 10)
+      if (val === targetVal) {
+        setActive({ pos: filledRows[i].pos, state: "match" })
+        setMessage({
+          text: `¡Clave "${key}" encontrada en la posición ${filledRows[i].pos}!`,
+          tone: "ok",
+        })
+        found = true
+        break
+      } else if (val > targetVal) {
+        // Si se pasó, ya no lo encontrará (porque está ordenado)
+        break
+      }
+    }
+
+    if (!found) {
+      setMessage({
+        text: `La clave "${key}" no se encuentra en el arreglo.`,
+        tone: "warn",
+      })
+      setActive(null)
+    }
+
+    setBusy(false)
+  }
+
   const searchHash = async () => {
     if (busy || !rows) return
     const key = searchInput.trim()
@@ -438,7 +647,7 @@ export default function App() {
       setMessage({ text: "Escribe una clave para buscar.", tone: "warn" })
       return
     }
-    
+
     if (!hashAlgo || !collision || (collision === "Doble Función Hash" && !doubleHash)) {
       setMessage({ text: "Falta seleccionar algoritmo o método de colisión.", tone: "warn" })
       return
@@ -570,12 +779,12 @@ export default function App() {
       }
 
       if (collision === "Lista Enlazada" || collision === "Arreglo Anidado") {
-         break
+        break
       }
 
       setActive({ pos, state: "collide" })
       setMessage({ text: `Posición ${pos} ocupada por otra clave. Resolviendo colisión...`, tone: "warn" })
-      
+
       currentSteps.push(
         <div key={`col_detect_${attempts}`} className="mb-2">
           <p className="mb-1 font-semibold text-[#a23b2a]">Intento {attempts + 2}: Colisión en posición {pos}</p>
@@ -590,7 +799,7 @@ export default function App() {
       if (collision === "Solución Lineal") {
         pos = (pos % N) + 1
       } else if (collision === "Solución Cuadrática") {
-        pos = ((pos - 1 + attempts * attempts) % N) + 1
+        pos = ((initialPos - 1 + attempts * attempts) % N) + 1
       } else if (collision === "Doble Función Hash") {
         const step = computeSecondaryHash(k, doubleHash, N)
         pos = ((pos - 1 + step) % N) + 1
@@ -714,6 +923,155 @@ export default function App() {
     setBusy(false)
   }
 
+  const searchExternalBinary = async () => {
+    if (busy || !rows) return
+    const key = searchInput.trim()
+    if (!key) {
+      setMessage({ text: "Escribe una clave para buscar.", tone: "warn" })
+      return
+    }
+
+    const targetVal = parseInt(key, 10)
+    if (isNaN(targetVal)) return
+
+    let isSorted = true
+    let previousValue = -Infinity
+    const filledRows = rows.filter((r) => r.key !== "")
+
+    for (const row of filledRows) {
+      const val = parseInt(row.key, 10)
+      if (val < previousValue) {
+        isSorted = false
+        break
+      }
+      previousValue = val
+    }
+
+    if (!isSorted) {
+      setMessage({
+        text: "Error: El arreglo DEBE estar ordenado para usar Búsqueda Binaria Externa.",
+        tone: "warn",
+      })
+      return
+    }
+
+    setBusy(true)
+    let currentRows = rows.map((r) => ({ ...r, inactive: false }))
+
+    const n = filledRows.length
+    if (n === 0) {
+      setMessage({ text: "El arreglo está vacío.", tone: "warn" })
+      setBusy(false)
+      return
+    }
+
+    const blockSize = currentBlockSize > 0 ? currentBlockSize : 1
+    const numBlocks = Math.ceil(n / blockSize)
+
+    setMessage({ text: `Búsqueda Binaria sobre ${numBlocks} bloques (Tamaño de bloque: ${blockSize})`, tone: "info" })
+    await sleep(1500)
+
+    let leftBlock = 0
+    let rightBlock = numBlocks - 1
+    let foundBlockIdx = -1
+
+    while (leftBlock <= rightBlock) {
+      const midBlock = Math.floor((leftBlock + rightBlock) / 2)
+      
+      const blockStartIdx = midBlock * blockSize
+      const blockEndIdx = Math.min((midBlock + 1) * blockSize, n) - 1
+      
+      const firstVal = parseInt(filledRows[blockStartIdx].key, 10)
+      const lastVal = parseInt(filledRows[blockEndIdx].key, 10)
+
+      setMessage({
+        text: `Evaluando Bloque ${midBlock + 1} (Pos ${filledRows[blockStartIdx].pos} a ${filledRows[blockEndIdx].pos}) - Valores: [${firstVal} ... ${lastVal}]`,
+        tone: "info",
+      })
+
+      // Marcar los extremos del bloque como activos temporalmente para visualización
+      setActive({ pos: filledRows[blockEndIdx].pos, state: "compare" })
+      await sleep(1200)
+
+      if (targetVal >= firstVal && targetVal <= lastVal) {
+        setMessage({ text: `El valor ${targetVal} se encuentra en el rango del Bloque ${midBlock + 1}. Iniciando búsqueda secuencial interna.`, tone: "ok" })
+        foundBlockIdx = midBlock
+        await sleep(1500)
+        break
+      }
+
+      if (targetVal < firstVal) {
+        // Descartar bloques a la derecha
+        for (let b = midBlock; b <= rightBlock; b++) {
+          const bStart = b * blockSize
+          const bEnd = Math.min((b + 1) * blockSize, n) - 1
+          for (let i = bStart; i <= bEnd; i++) {
+            const globalIndex = currentRows.findIndex(r => r.pos === filledRows[i].pos)
+            if (globalIndex !== -1) currentRows[globalIndex].inactive = true
+          }
+        }
+        rightBlock = midBlock - 1
+      } else {
+        // Descartar bloques a la izquierda
+        for (let b = leftBlock; b <= midBlock; b++) {
+          const bStart = b * blockSize
+          const bEnd = Math.min((b + 1) * blockSize, n) - 1
+          for (let i = bStart; i <= bEnd; i++) {
+            const globalIndex = currentRows.findIndex(r => r.pos === filledRows[i].pos)
+            if (globalIndex !== -1) currentRows[globalIndex].inactive = true
+          }
+        }
+        leftBlock = midBlock + 1
+      }
+
+      setRows([...currentRows])
+      await sleep(800)
+    }
+
+    if (foundBlockIdx === -1) {
+      setMessage({
+        text: `La clave "${key}" no se encuentra en ninguno de los bloques.`,
+        tone: "warn",
+      })
+      setActive(null)
+      setBusy(false)
+      return
+    }
+
+    // Búsqueda secuencial (o binaria) interna en el bloque encontrado
+    const blockStartIdx = foundBlockIdx * blockSize
+    const blockEndIdx = Math.min((foundBlockIdx + 1) * blockSize, n) - 1
+    
+    let found = false
+    for (let i = blockStartIdx; i <= blockEndIdx; i++) {
+      setActive({ pos: filledRows[i].pos, state: "compare" })
+      await sleep(500)
+
+      const val = parseInt(filledRows[i].key, 10)
+      if (val === targetVal) {
+        setActive({ pos: filledRows[i].pos, state: "match" })
+        setMessage({
+          text: `¡Clave "${key}" encontrada en la posición ${filledRows[i].pos}!`,
+          tone: "ok",
+        })
+        found = true
+        break
+      } else if (val > targetVal) {
+        break
+      }
+    }
+
+    if (!found) {
+      setMessage({
+        text: `La clave "${key}" no se encuentra en el bloque.`,
+        tone: "warn",
+      })
+      setActive(null)
+    }
+
+    setBusy(false)
+  }
+
   const deleteSequential = async () => {
     if (busy || !rows) return
     const key = keyInput.trim()
@@ -721,7 +1079,7 @@ export default function App() {
       setMessage({ text: "Escribe la clave que deseas borrar.", tone: "warn" })
       return
     }
-    
+
     if (isHash) {
       if (!hashAlgo || !collision || (collision === "Doble Función Hash" && !doubleHash)) {
         setMessage({ text: "Falta seleccionar algoritmo o método de colisión.", tone: "warn" })
@@ -826,7 +1184,7 @@ export default function App() {
         if (foundIdx !== -1) {
           setActive({ pos, state: "match", subIndex: foundIdx })
           await sleep(400)
-          
+
           setRows((prev) => {
             if (!prev) return prev
             const newRows = [...prev]
@@ -840,7 +1198,7 @@ export default function App() {
             }
             return newRows
           })
-          
+
           if (parts.length > 1) {
             setMessage({ text: `¡Clave "${key}" borrada de la posición ${pos} (columna ${foundIdx + 1})!`, tone: "ok" })
             currentSteps.push(
@@ -869,12 +1227,12 @@ export default function App() {
         }
 
         if (collision === "Lista Enlazada" || collision === "Arreglo Anidado") {
-           break
+          break
         }
 
         setActive({ pos, state: "collide" })
         setMessage({ text: `Posición ${pos} ocupada por otra clave. Buscando en siguiente...`, tone: "warn" })
-        
+
         currentSteps.push(
           <div key={`col_detect_${attempts}`} className="mb-2">
             <p className="mb-1 font-semibold text-[#a23b2a]">Intento {attempts + 2}: Clave distinta en posición {pos}</p>
@@ -887,7 +1245,7 @@ export default function App() {
         if (collision === "Solución Lineal") {
           pos = (pos % N) + 1
         } else if (collision === "Solución Cuadrática") {
-          pos = ((pos - 1 + attempts * attempts) % N) + 1
+          pos = ((initialPos - 1 + attempts * attempts) % N) + 1
         } else if (collision === "Doble Función Hash") {
           const step = computeSecondaryHash(k, doubleHash, N)
           pos = ((pos - 1 + step) % N) + 1
@@ -906,7 +1264,7 @@ export default function App() {
       if (!found) {
         setMessage({ text: `La clave "${key}" no se encuentra en la tabla Hash.`, tone: "warn" })
       }
-      
+
       setActive(null)
       setBusy(false)
       return
@@ -961,7 +1319,7 @@ export default function App() {
 
     setBusy(true)
     setMessage({ text: `Insertando "${key}" en ${treeAlgo}…`, tone: "info" })
-    
+
     // @ts-ignore - frames will be checked dynamically
     let result: { newRoot: TreeNode | null; steps: string[]; frames?: any[]; logicData?: any } = { newRoot: null, steps: [] }
 
@@ -1005,16 +1363,16 @@ export default function App() {
       setTreeData(result.newRoot)
     } else {
       setTreeData(result.newRoot)
-      setHashExplanation({ 
-        title: treeAlgo, 
-        steps: result.steps.map((s,i) => (
+      setHashExplanation({
+        title: treeAlgo,
+        steps: result.steps.map((s, i) => (
           <div key={`tree_step_${i}`} className="mb-2 ml-2 border-l-2 border-[#E6B793] pl-3">
             <p className="text-sm text-[#52241A]/80">{s}</p>
           </div>
-        )) 
+        ))
       })
     }
-    
+
     setMessage({ text: `Operación completada en ${treeAlgo}.`, tone: "ok" })
     if (treeAlgo !== "Árbol de Huffman") setKeyInput("")
     setBusy(false)
@@ -1253,7 +1611,7 @@ export default function App() {
         if (collision === "Solución Lineal") {
           pos = (pos % N) + 1
         } else if (collision === "Solución Cuadrática") {
-          pos = ((pos - 1 + attempts * attempts) % N) + 1
+          pos = ((initialPos - 1 + attempts * attempts) % N) + 1
         } else if (collision === "Doble Función Hash") {
           const step = computeSecondaryHash(k, doubleHash, N)
           pos = ((pos - 1 + step) % N) + 1
@@ -1303,32 +1661,86 @@ export default function App() {
       }
     })
 
-    let randStr = ""
-    let attempts = 0
-    const maxAttempts = 500
+    const emptySpots = rows.length - existingKeys.size
+    if (emptySpots <= 0) {
+      setMessage({ text: "El arreglo ya está lleno.", tone: "warn" })
+      return
+    }
 
-    do {
+    const newKeys: string[] = []
+    let attempts = 0
+    const maxAttempts = emptySpots * 50
+
+    while (newKeys.length < emptySpots && attempts < maxAttempts) {
+      let randStr = ""
       if (keySize === 1) {
         randStr = Math.floor(Math.random() * 10).toString()
       } else {
         randStr = Math.floor(Math.random() * (max - min + 1) + min).toString()
       }
+      if (!existingKeys.has(randStr) && !newKeys.includes(randStr)) {
+        newKeys.push(randStr)
+      }
       attempts++
-    } while (existingKeys.has(randStr) && attempts < maxAttempts)
+    }
 
-    if (existingKeys.has(randStr)) {
+    if (newKeys.length === 0) {
       setMessage({
-        text: "No se pudo generar una clave única. Intenta aumentar el tamaño de la clave.",
+        text: "No se pudieron generar claves únicas suficientes.",
         tone: "warn",
       })
       return
     }
 
-    setKeyInput(randStr)
     if (isHash) {
-      insertHash(randStr)
+      if (!hashAlgo || !collision || (collision === "Doble Función Hash" && !doubleHash)) {
+        setMessage({ text: "Falta seleccionar algoritmo de hash.", tone: "warn" })
+        return
+      }
+
+      const tempRows = [...rows]
+      let keyIdx = 0
+      for (let i = 0; i < tempRows.length && keyIdx < newKeys.length; i++) {
+        if (!tempRows[i].key) {
+          tempRows[i] = { ...tempRows[i], key: newKeys[keyIdx++] }
+        }
+      }
+      
+      const finalRows = rehashInstantly(tempRows, hashAlgo, collision, doubleHash)
+      setRows(finalRows)
+      
+      const summarySteps = [
+        <div key="auto_summary" className="mb-4">
+          <p className="mb-1 font-semibold text-[#52241A]">Llenado Automático</p>
+          <p className="text-sm text-[#52241A]/80 ml-2">
+            Se insertaron <strong>{newKeys.length}</strong> claves aleatorias usando <strong>{hashAlgo}</strong> y <strong>{collision}</strong>.
+          </p>
+        </div>
+      ]
+      setHashExplanation({
+        title: `Algoritmo: ${hashAlgo}`,
+        steps: summarySteps,
+      })
+      setMessage({ text: `Se llenó el arreglo con ${newKeys.length} claves aleatorias.`, tone: "ok" })
     } else {
-      insertSequential(randStr)
+      const tempRows = [...rows]
+      let keyIdx = 0
+      for (let i = 0; i < tempRows.length && keyIdx < newKeys.length; i++) {
+        if (!tempRows[i].key) {
+          tempRows[i] = { ...tempRows[i], key: newKeys[keyIdx++] }
+        }
+      }
+
+      if (activeOption === "Binaria" || (activeOption === "Secuencial" && activeSection === "externas")) {
+        const allK = tempRows.map(r => r.key).filter(k => k !== "")
+        allK.sort((a,b) => parseInt(a,10) - parseInt(b,10))
+        for (let i = 0; i < tempRows.length; i++) {
+            tempRows[i].key = i < allK.length ? allK[i] : ""
+        }
+      }
+
+      setRows(tempRows)
+      setMessage({ text: `Se llenó el arreglo con ${newKeys.length} claves aleatorias.`, tone: "ok" })
     }
   }
 
@@ -1396,6 +1808,8 @@ export default function App() {
         activeOption={activeOption}
         collapsed={collapsed}
         onAlgorithmChange={handleAlgorithmChange}
+        onSaveClick={() => setSaveModalOpen(true)}
+        onLoadClick={() => setLoadModalOpen(true)}
       />
 
       <div
@@ -1465,7 +1879,7 @@ export default function App() {
                 {isTree ? (
                   <TreeView treeData={treeData} />
                 ) : (
-                  <TableView rows={rows} active={active} isHash={isHash} collision={collision} />
+                  <TableView rows={rows} active={active} isHash={isHash} collision={collision} isBlockMode={isBlockMode} blockSize={currentBlockSize} />
                 )}
 
                 <HashExplanation
@@ -1514,22 +1928,20 @@ export default function App() {
 
               {message && (
                 <div
-                  className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-[13px] font-medium ${
-                    message.tone === "ok"
-                      ? "bg-[#2f7d4f]/12 text-[#256b42]"
-                      : message.tone === "warn"
+                  className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-[13px] font-medium ${message.tone === "ok"
+                    ? "bg-[#2f7d4f]/12 text-[#256b42]"
+                    : message.tone === "warn"
                       ? "bg-[#a23b2a]/12 text-[#a23b2a]"
                       : "bg-[#52241A]/8 text-[#52241A]"
-                  }`}
+                    }`}
                 >
                   <span
-                    className={`inline-block size-2 shrink-0 rounded-full ${
-                      message.tone === "ok"
-                        ? "bg-[#2f7d4f]"
-                        : message.tone === "warn"
+                    className={`inline-block size-2 shrink-0 rounded-full ${message.tone === "ok"
+                      ? "bg-[#2f7d4f]"
+                      : message.tone === "warn"
                         ? "bg-[#a23b2a]"
                         : "bg-[#52241A] motion-safe:animate-pulse"
-                    }`}
+                      }`}
                   />
                   {message.text}
                 </div>
@@ -1540,6 +1952,87 @@ export default function App() {
       </div>
 
       <ConfirmModal pendingChange={pendingChange} applyChange={applyChange} cancelChange={cancelChange} />
+
+      {saveModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#52241A]/40 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+            <h3 className="mb-2 text-lg font-bold text-[#52241A]">Guardar Estructura</h3>
+            <p className="mb-4 text-sm text-[#52241A]/70">Ingresa un nombre para guardar el estado actual de la estructura y retomarlo después.</p>
+            <input
+              autoFocus
+              type="text"
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              placeholder="Ej. Mi tabla hash 1"
+              className="w-full rounded-xl border border-[#52241A]/20 bg-[#faf6f2] px-4 py-2.5 text-sm font-medium text-[#52241A] placeholder-[#52241A]/40 outline-none transition focus:border-[#E6B793] focus:ring-2 focus:ring-[#E6B793]/30"
+              onKeyDown={(e) => e.key === "Enter" && handleSaveStructure()}
+            />
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => { setSaveModalOpen(false); setSaveName("") }}
+                className="rounded-lg px-4 py-2 text-sm font-semibold text-[#52241A]/70 transition hover:bg-[#52241A]/5"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveStructure}
+                className="rounded-lg bg-[#52241A] px-4 py-2 text-sm font-bold text-white shadow-md transition hover:bg-[#6B2E24] active:bg-[#401C14]"
+              >
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {loadModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#52241A]/40 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl flex flex-col max-h-[80vh]">
+            <h3 className="mb-4 text-lg font-bold text-[#52241A]">Cargar Estructura</h3>
+            <div className="flex-1 overflow-y-auto min-h-0 pr-1 space-y-3">
+              {savedStructures.length === 0 ? (
+                <div className="text-center py-8 text-[#52241A]/50 text-sm">
+                  No hay estructuras guardadas.
+                </div>
+              ) : (
+                savedStructures.map((struct) => (
+                  <div key={struct.id} className="flex items-center justify-between p-3 rounded-xl border border-[#52241A]/10 bg-[#faf6f2]/50 hover:bg-[#faf6f2] transition group">
+                    <div className="flex-1 min-w-0 mr-4">
+                      <p className="font-bold text-[#52241A] truncate">{struct.name}</p>
+                      <p className="text-xs text-[#52241A]/60 mt-0.5">
+                        {new Date(struct.timestamp).toLocaleString()} • {struct.activeOption}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleDeleteSaved(struct.id)}
+                        className="p-2 rounded-lg text-[#a23b2a]/70 hover:bg-[#a23b2a]/10 hover:text-[#a23b2a] transition opacity-0 group-hover:opacity-100"
+                        title="Eliminar"
+                      >
+                        <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                      </button>
+                      <button
+                        onClick={() => handleLoadStructure(struct)}
+                        className="px-3 py-1.5 rounded-lg bg-[#E6B793]/20 text-[#52241A] font-semibold text-xs transition hover:bg-[#E6B793]/40"
+                      >
+                        Cargar
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="mt-4 pt-4 border-t border-[#52241A]/10 flex justify-end">
+              <button
+                onClick={() => setLoadModalOpen(false)}
+                className="rounded-lg px-4 py-2 text-sm font-semibold text-[#52241A]/70 transition hover:bg-[#52241A]/5"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

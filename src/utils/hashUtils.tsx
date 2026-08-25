@@ -63,7 +63,8 @@ export const rehashInstantly = (
   // Insertar instantáneo
   for (const key of allKeys) {
     const k = parseInt(key, 10);
-    let pos = computeInitialHash(k, algo, N);
+    let initialPos = computeInitialHash(k, algo, N);
+    let pos = initialPos;
     let attempts = 0;
     let inserted = false;
 
@@ -87,7 +88,7 @@ export const rehashInstantly = (
         if (coll === "Solución Lineal") {
           pos = (pos % N) + 1;
         } else if (coll === "Solución Cuadrática") {
-          pos = ((pos - 1 + attempts * attempts) % N) + 1;
+          pos = ((initialPos - 1 + attempts * attempts) % N) + 1;
         } else if (coll === "Doble Función Hash") {
           const step = computeSecondaryHash(k, double, N);
           pos = ((pos - 1 + step) % N) + 1;
