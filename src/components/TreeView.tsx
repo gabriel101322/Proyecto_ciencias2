@@ -159,7 +159,7 @@ export default function TreeView({ treeData }: TreeViewProps) {
     )
   }
 
-  const renderNodes = (node: LayoutNode) => {
+  const renderNodes = (node: LayoutNode, incomingEdgeLabel?: string) => {
     const isTraverse = node.activeState === "traverse"
     const isCollision = node.activeState === "collision"
     const isPlaced = node.activeState === "placed"
@@ -192,17 +192,17 @@ export default function TreeView({ treeData }: TreeViewProps) {
     return (
       <g key={`node-${node.id}`} className={`transition-all duration-500 ${extraClasses}`}>
         {/* Etiqueta de la rama (0 o 1) si existe */}
-        {node.edgeLabel !== undefined && (
+        {(node.edgeLabel !== undefined || incomingEdgeLabel !== undefined) && (
           <text
             x={node.x}
             y={node.y - 25}
             textAnchor="middle"
             fontSize="11"
-            fill={(node.edgeLabel === "0" || node.edgeLabel === "1") ? "#d32f2f" : "#52241A"}
+            fill={((node.edgeLabel ?? incomingEdgeLabel) === "0" || (node.edgeLabel ?? incomingEdgeLabel) === "1") ? "#d32f2f" : "#52241A"}
             opacity="0.8"
             className="font-mono font-bold tracking-widest drop-shadow-sm"
           >
-            {node.edgeLabel}
+            {node.edgeLabel ?? incomingEdgeLabel}
           </text>
         )}
 
@@ -242,9 +242,9 @@ export default function TreeView({ treeData }: TreeViewProps) {
           {node.label || ""}
         </text>
 
-        {node.left && renderNodes(node.left)}
-        {node.right && renderNodes(node.right)}
-        {node.children && node.children.map(child => renderNodes(child))}
+        {node.left && renderNodes(node.left, "0")}
+        {node.right && renderNodes(node.right, "1")}
+        {node.children && node.children.map(child => renderNodes(child, child.edgeLabel))}
       </g>
     )
   }

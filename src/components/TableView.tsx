@@ -10,11 +10,17 @@ type TableViewProps = {
   } | null
   isHash: boolean
   collision: string
+  splitRange?: {
+    left: number
+    mid: number
+    right: number
+    activeHalf: "left" | "right"
+  } | null
 }
 
 type DisplayItem = { type: "row"; data: Row } | { type: "ellipsis"; id: string }
 
-export default function TableView({ rows, active, isHash, collision }: TableViewProps) {
+export default function TableView({ rows, active, isHash, collision, splitRange }: TableViewProps) {
   useEffect(() => {
     if (active?.pos) {
       const el = document.getElementById(`row-${active.pos}`)
@@ -150,7 +156,17 @@ export default function TableView({ rows, active, isHash, collision }: TableView
                   const act = active?.pos === row.pos ? active.state : null
 
                   let rowClass = ""
-                  if (act === "match") {
+                  const inLeftSplit = splitRange && splitRange.activeHalf === "left" && row.pos >= splitRange.left && row.pos <= splitRange.mid
+                  const inRightSplit = splitRange && splitRange.activeHalf === "right" && row.pos > splitRange.mid && row.pos <= splitRange.right
+
+                  if (inLeftSplit || inRightSplit) {
+                    const isStart = inLeftSplit ? row.pos === splitRange.left : row.pos === splitRange.mid + 1
+                    const isEnd = inLeftSplit ? row.pos === splitRange.mid : row.pos === splitRange.right
+                    
+                    rowClass = `bg-yellow-200/50 text-yellow-900 font-semibold border-yellow-400 border-x-2 ${
+                      isStart ? "border-t-2" : ""
+                    } ${isEnd ? "border-b-2" : ""}`
+                  } else if (act === "match") {
                     rowClass = "bg-[#2f7d4f] text-white font-semibold"
                   } else if (act === "insert") {
                     rowClass = "bg-[#E6B793] text-[#52241A] font-semibold"
@@ -176,7 +192,7 @@ export default function TableView({ rows, active, isHash, collision }: TableView
                     <tr
                       id={`row-${row.pos}`}
                       key={`row_${row.pos}`}
-                      className={`transition-all duration-500 ${rowClass}`}
+                      className={`transition-colors duration-500 ${rowClass}`}
                     >
                       <td
                         className={`border-b border-[#52241A]/10 px-4 py-2 font-medium tabular-nums ${
