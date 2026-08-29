@@ -63,6 +63,7 @@ export default function App() {
     activeOption !== "Árboles de Búsqueda"
   const isHash = activeOption === "Transformaciones de Claves"
   const isTree = activeOption === "Árboles de Búsqueda"
+  const isExternal = activeSection === "externas"
 
   const hasInsertedData = !!rows && rows.some((r) => r.key !== "")
 
@@ -188,7 +189,12 @@ export default function App() {
       return
     }
     const capped = Math.min(size, 2000)
-    setRows(Array.from({ length: capped }, (_, i) => ({ pos: i + 1, key: "" })))
+
+    const numBlocks = Math.ceil(Math.sqrt(capped))
+    const blockSize = Math.ceil(capped / numBlocks) || 1
+    const adjustedSize = numBlocks * blockSize
+
+    setRows(Array.from({ length: adjustedSize }, (_, i) => ({ pos: i + 1, key: "" })))
     setActive(null)
     setMessage(null)
   }
@@ -490,6 +496,51 @@ export default function App() {
     setBusy(true)
     setMessage({ text: `Buscando "${key}"…`, tone: "info" })
 
+    const n = rows.length
+    const numBlocks = Math.ceil(Math.sqrt(n))
+    const blockSize = Math.ceil(n / numBlocks) || 1
+
+    if (isExternal) {
+      let currentRows = rows.map((r) => ({ ...r, inactive: false }))
+      
+      for (let b = 0; b < numBlocks; b++) {
+        let startIdx = b * blockSize;
+        let endIdx = Math.min((b + 1) * blockSize, n) - 1;
+        
+        let hasData = false;
+        for (let i = startIdx; i <= endIdx; i++) {
+           if (currentRows[i].key !== "") { hasData = true; break; }
+        }
+        if (!hasData) continue;
+
+        setMessage({ text: `Cargando Bloque ${b + 1} a memoria...`, tone: "info" });
+        setActive({ pos: currentRows[startIdx].pos, state: "compare" });
+        await sleep(1000);
+
+        for (let i = startIdx; i <= endIdx; i++) {
+           if (!isHash && currentRows[i].key === "") break;
+           
+           setActive({ pos: currentRows[i].pos, state: "compare" })
+           await sleep(320)
+
+           if (currentRows[i].key === key) {
+             setActive({ pos: currentRows[i].pos, state: "match" })
+             setMessage({ text: `Clave "${key}" encontrada en Bloque ${b + 1} (posición ${currentRows[i].pos}).`, tone: "ok" })
+             setBusy(false)
+             return
+           }
+        }
+        
+        for (let i = startIdx; i <= endIdx; i++) currentRows[i].inactive = true;
+        setRows([...currentRows]);
+      }
+      
+      setMessage({ text: `La clave "${key}" no se encuentra en el arreglo.`, tone: "warn" })
+      setActive(null)
+      setBusy(false)
+      return
+    }
+
     for (let i = 0; i < rows.length; i++) {
       if (!isHash && rows[i].key === "") {
         break
@@ -741,13 +792,76 @@ export default function App() {
     await sleep(400)
 
     let found = false
+    const n = currentRows.length
+    const numBlocks = Math.ceil(Math.sqrt(n))
+    const blockSize = Math.ceil(n / numBlocks) || 1
+
+    if (isExternal) {
+      let blockLeft = 0;
+      let blockRight = numBlocks - 1;
+      let targetBlock = -1;
+
+      while (blockLeft <= blockRight) {
+        let blockMid = Math.floor((blockLeft + blockRight) / 2);
+        let startIdx = blockMid * blockSize;
+        let endIdx = Math.min((blockMid + 1) * blockSize, n) - 1;
+
+        while (endIdx >= startIdx && currentRows[endIdx].key === "") endIdx--;
+        if (endIdx < startIdx) {
+          blockRight = blockMid - 1;
+          continue;
+        }
+
+        let minVal = parseInt(currentRows[startIdx].key, 10);
+        let maxVal = parseInt(currentRows[endIdx].key, 10);
+        
+        setMessage({ text: `Evaluando Bloque ${blockMid + 1} (Rango: ${minVal} - ${maxVal})`, tone: "info" });
+        setSplitRange({ left: currentRows[startIdx].pos, mid: currentRows[endIdx].pos, right: currentRows[endIdx].pos, activeHalf: "left" });
+        await sleep(1000);
+        setSplitRange(null);
+
+        if (targetVal >= minVal && targetVal <= maxVal) {
+          targetBlock = blockMid;
+          break;
+        } else if (targetVal < minVal) {
+          blockRight = blockMid - 1;
+          for(let b = blockMid; b <= numBlocks - 1; b++) {
+            let s = b * blockSize;
+            let e = Math.min((b + 1) * blockSize, n) - 1;
+            for(let i=s; i<=e; i++) currentRows[i].inactive = true;
+          }
+          setRows([...currentRows]);
+        } else {
+          blockLeft = blockMid + 1;
+          for(let b = 0; b <= blockMid; b++) {
+            let s = b * blockSize;
+            let e = Math.min((b + 1) * blockSize, n) - 1;
+            for(let i=s; i<=e; i++) currentRows[i].inactive = true;
+          }
+          setRows([...currentRows]);
+        }
+      }
+
+      if (targetBlock === -1) {
+        setMessage({ text: `La clave "${key}" no se encuentra en ningún bloque válido.`, tone: "warn" });
+        setActive(null);
+        setBusy(false);
+        return;
+      }
+
+      setMessage({ text: `Clave en rango del Bloque ${targetBlock + 1}. Iniciando búsqueda binaria interna...`, tone: "info" });
+      await sleep(1000);
+      left = targetBlock * blockSize;
+      right = Math.min((targetBlock + 1) * blockSize, n) - 1;
+      while (right >= left && currentRows[right].key === "") right--;
+    }
 
     while (left <= right) {
       const mid = Math.floor((left + right) / 2)
       const midVal = parseInt(currentRows[mid].key, 10)
 
       setMessage({
-        text: `Partición actual: [Pos ${currentRows[left].pos} a ${currentRows[right].pos}] - Evaluando mitad: Pos ${currentRows[mid].pos}`,
+        text: `Buscando: [Pos ${currentRows[left].pos} a ${currentRows[right].pos}] - Mitad: Pos ${currentRows[mid].pos}`,
         tone: "info",
       })
 
@@ -766,7 +880,7 @@ export default function App() {
       if (midVal === targetVal) {
         setActive({ pos: currentRows[mid].pos, state: "match" })
         setMessage({
-          text: `¡Clave "${key}" encontrada en la posición ${currentRows[mid].pos}!`,
+          text: `Clave "${key}" encontrada en la posición ${currentRows[mid].pos}.`,
           tone: "ok",
         })
         found = true
@@ -1592,7 +1706,7 @@ export default function App() {
                 {isTree ? (
                   <TreeView treeData={treeData} />
                 ) : (
-                  <TableView rows={rows} active={active} isHash={isHash} collision={collision} splitRange={splitRange} />
+                  <TableView rows={rows} active={active} isHash={isHash} collision={collision} splitRange={splitRange} isExternal={isExternal} />
                 )}
 
                 <HashExplanation
