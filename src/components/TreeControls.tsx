@@ -8,6 +8,8 @@ type TopTreeControlsProps = {
   treeAlgo: string
   setTreeAlgo: Dispatch<SetStateAction<string>>
   clearTree: () => void
+  onSave: () => void
+  onOpen: (e: React.ChangeEvent<HTMLInputElement>) => void
 }
 
 export function TopTreeControls({
@@ -16,6 +18,8 @@ export function TopTreeControls({
   treeAlgo,
   setTreeAlgo,
   clearTree,
+  onSave,
+  onOpen,
 }: TopTreeControlsProps) {
   return (
     <div className="flex items-end gap-3">
@@ -50,7 +54,8 @@ export function TopTreeControls({
       </button>
 
       <div className="ml-auto flex items-end gap-1.5">
-        <button className="flex h-10 items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-2.5 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5">
+        <label className="flex h-10 cursor-pointer items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-2.5 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5">
+          <input type="file" accept=".json" className="hidden" onChange={onOpen} />
           <svg
             viewBox="0 0 24 24"
             className="size-4"
@@ -63,8 +68,8 @@ export function TopTreeControls({
             <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
           </svg>
           Abrir
-        </button>
-        <button className="flex h-10 items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-2.5 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5">
+        </label>
+        <button onClick={onSave} className="flex h-10 items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-2.5 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5">
           <svg
             viewBox="0 0 24 24"
             className="size-4"
@@ -104,8 +109,6 @@ type BottomTreeControlsProps = {
   treeAlgo: string
   keyInput: string
   setKeyInput: Dispatch<SetStateAction<string>>
-  searchInput: string
-  setSearchInput: Dispatch<SetStateAction<string>>
   insertKey: () => void
   deleteKey: () => void
   searchKey: () => void
@@ -117,8 +120,6 @@ export function BottomTreeControls({
   treeAlgo,
   keyInput,
   setKeyInput,
-  searchInput,
-  setSearchInput,
   insertKey,
   deleteKey,
   searchKey,
@@ -154,31 +155,9 @@ export function BottomTreeControls({
         Borrar clave
       </button>
 
-      <div className="relative min-w-0 flex-1 ml-4">
-        <svg
-          viewBox="0 0 24 24"
-          className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#52241A]/40"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="11" cy="11" r="7" />
-          <path d="m21 21-4.3-4.3" />
-        </svg>
-        <input
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && searchKey()}
-          disabled={busy || !hasData}
-          placeholder="Buscar clave"
-          className="h-10 w-full rounded-lg border border-[#52241A]/20 bg-white pl-9 pr-3 text-[13px] text-[#2b1610] shadow-sm outline-none transition placeholder:text-[#52241A]/30 focus:border-[#6B2E24] focus:ring-2 focus:ring-[#E6B793] disabled:opacity-50"
-        />
-      </div>
       <button
         onClick={searchKey}
-        disabled={busy || !hasData || !searchInput.trim()}
+        disabled={busy || !hasData || !keyInput.trim()}
         className="h-10 shrink-0 rounded-lg bg-[#52241A] px-3 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#3d1912] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
       >
         Buscar clave

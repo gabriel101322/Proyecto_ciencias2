@@ -29,7 +29,6 @@ export default function App() {
   const [arraySizeInput, setArraySizeInput] = useState("")
   const [rows, setRows] = useState<Row[] | null>(null)
   const [keyInput, setKeyInput] = useState("")
-  const [searchInput, setSearchInput] = useState("")
   const [huffmanText, setHuffmanText] = useState("")
   const [hashAlgo, setHashAlgo] = useState("")
   const [collision, setCollision] = useState("")
@@ -46,6 +45,8 @@ export default function App() {
     state: "compare" | "match" | "insert" | "collide" | "resolve"
     subIndex?: number
   } | null>(null)
+  
+  const [splitRange, setSplitRange] = useState<{ left: number; mid: number; right: number; activeHalf: "left" | "right" } | null>(null)
   const [message, setMessage] = useState<{
     text: string
     tone: "info" | "ok" | "warn"
@@ -62,6 +63,9 @@ export default function App() {
     activeOption !== "Árboles de Búsqueda"
   const isHash = activeOption === "Transformaciones de Claves"
   const isTree = activeOption === "Árboles de Búsqueda"
+  const isExternal = activeSection === "externas"
+
+  const hasInsertedData = !!rows && rows.some((r) => r.key !== "")
 
   const triggerRehash = (algo: string, coll: string, double: string) => {
     if (!algo || !coll || (coll === "Doble Función Hash" && !double)) return
@@ -102,7 +106,7 @@ export default function App() {
   }
 
   const requestChange = (change: PendingChange) => {
-    if (rows && rows.length > 0) {
+    if (hasInsertedData) {
       setPendingChange(change)
     } else {
       applyChange(change, false)
@@ -130,9 +134,7 @@ export default function App() {
           }
         })
 
-        if (change.option === "Binaria") {
-          allKeys.sort((a, b) => parseInt(a, 10) - parseInt(b, 10))
-        }
+        allKeys.sort((a, b) => parseInt(a, 10) - parseInt(b, 10))
 
         const newRows = rows.map((r) => ({ ...r, inactive: false, key: "" }))
         for (let i = 0; i < Math.min(allKeys.length, newRows.length); i++) {
@@ -187,9 +189,77 @@ export default function App() {
       return
     }
     const capped = Math.min(size, 2000)
-    setRows(Array.from({ length: capped }, (_, i) => ({ pos: i + 1, key: "" })))
+
+    const numBlocks = Math.ceil(Math.sqrt(capped))
+    const blockSize = Math.ceil(capped / numBlocks) || 1
+    const adjustedSize = numBlocks * blockSize
+
+    setRows(Array.from({ length: adjustedSize }, (_, i) => ({ pos: i + 1, key: "" })))
     setActive(null)
     setMessage(null)
+  }
+
+  const handleSave = () => {
+    let dataToSave: any = {}
+    if (isTree) {
+      if (!treeData) {
+        setMessage({ text: "No hay un árbol para guardar.", tone: "warn" })
+        return
+      }
+      dataToSave = { type: "tree", data: treeData, huffmanText: huffmanText }
+    } else {
+      if (!rows || rows.length === 0) {
+        setMessage({ text: "No hay un arreglo para guardar.", tone: "warn" })
+        return
+      }
+      dataToSave = { type: "array", data: rows, size: arraySizeInput }
+    }
+    
+    const blob = new Blob([JSON.stringify(dataToSave, null, 2)], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `data_${isTree ? "tree" : "array"}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    setMessage({ text: "Datos guardados exitosamente.", tone: "ok" })
+  }
+
+  const handleOpen = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      try {
+        const result = event.target?.result as string
+        const parsed = JSON.parse(result)
+        
+        if (isTree) {
+          if (parsed.type !== "tree") {
+            setMessage({ text: "No se puede abrir un arreglo de tabla en la sección de árboles.", tone: "warn" })
+            return
+          }
+          setTreeData(parsed.data)
+          if (parsed.huffmanText) setHuffmanText(parsed.huffmanText)
+          setMessage({ text: "Árbol cargado exitosamente.", tone: "ok" })
+        } else {
+          if (parsed.type !== "array") {
+            setMessage({ text: "No se puede abrir un árbol en la sección de arreglos.", tone: "warn" })
+            return
+          }
+          setRows(parsed.data)
+          if (parsed.size) setArraySizeInput(parsed.size)
+          setMessage({ text: "Arreglo cargado exitosamente.", tone: "ok" })
+        }
+      } catch (err) {
+        setMessage({ text: "Error al leer el archivo. Formato inválido.", tone: "warn" })
+      }
+    }
+    reader.readAsText(file)
+    e.target.value = ""
   }
 
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -211,49 +281,63 @@ export default function App() {
       setMessage({ text: error, tone: "warn" })
       return
     }
+
+    const firstEmpty = rows.findIndex(r => r.key === "")
+    if (firstEmpty === -1) {
+      setMessage({ text: "El arreglo está lleno, no hay espacio disponible.", tone: "warn" })
+      return
+    }
+
     setBusy(true)
     setMessage({ text: `Insertando "${key}"…`, tone: "info" })
 
-    for (let i = 0; i < rows.length; i++) {
+    let targetIndex = firstEmpty
+    for (let i = 0; i < firstEmpty; i++) {
       setActive({ pos: rows[i].pos, state: "compare" })
       await sleep(320)
 
       if (rows[i].key === key) {
         setActive({ pos: rows[i].pos, state: "match" })
-        setMessage({
-          text: `La clave "${key}" ya existe en la posición ${rows[i].pos}.`,
-          tone: "warn",
-        })
+        setMessage({ text: `La clave "${key}" ya existe en la posición ${rows[i].pos}.`, tone: "warn" })
         setBusy(false)
         return
       }
 
-      if (rows[i].key === "") {
-        setActive({ pos: rows[i].pos, state: "insert" })
-        setRows((prev) =>
-          prev
-            ? prev.map((r) => (r.pos === rows[i].pos ? { ...r, key } : r))
-            : prev
-        )
-        setMessage({
-          text: `Clave "${key}" insertada en la posición ${rows[i].pos}.`,
-          tone: "ok",
-        })
-        setKeyInput("")
-        await sleep(600)
-        setActive(null)
+      if (parseInt(key, 10) < parseInt(rows[i].key, 10)) {
+        targetIndex = i
+        break
+      }
+    }
+
+    for (let i = targetIndex; i < firstEmpty; i++) {
+      if (rows[i].key === key) {
+        setActive({ pos: rows[i].pos, state: "match" })
+        setMessage({ text: `La clave "${key}" ya existe en la posición ${rows[i].pos}.`, tone: "warn" })
         setBusy(false)
         return
       }
     }
 
-    setMessage({
-      text: "El arreglo está lleno, no hay espacio disponible.",
-      tone: "warn",
+    setActive({ pos: rows[targetIndex].pos, state: "insert" })
+    
+    setRows((prev) => {
+      if (!prev) return prev
+      const newRows = [...prev]
+      for (let i = firstEmpty; i > targetIndex; i--) {
+        newRows[i] = { ...newRows[i], key: newRows[i - 1].key }
+      }
+      newRows[targetIndex] = { ...newRows[targetIndex], key }
+      return newRows
     })
+
+    setMessage({
+      text: `Clave "${key}" insertada en la posición ${rows[targetIndex].pos}.`,
+      tone: "ok",
+    })
+    setKeyInput("")
+    await sleep(600)
     setActive(null)
     setBusy(false)
-    setKeyInput("")
   }
 
   const deleteKeyFromTree = async () => {
@@ -261,6 +345,10 @@ export default function App() {
     const key = keyInput.trim().toUpperCase()
     if (!key) {
       setMessage({ text: "Escribe la clave que deseas borrar.", tone: "warn" })
+      return
+    }
+    if (!/^[a-zA-ZñÑáéíóúÁÉÍÓÚ\s]+$/.test(key)) {
+      setMessage({ text: "Solo se permiten valores alfabéticos en los árboles.", tone: "warn" })
       return
     }
 
@@ -319,9 +407,13 @@ export default function App() {
 
   const handleTreeSearch = async () => {
     if (busy || !treeData) return
-    const key = searchInput.trim()
+    const key = keyInput.trim()
     if (!key) {
       setMessage({ text: "Escribe una clave para buscar.", tone: "warn" })
+      return
+    }
+    if (!/^[a-zA-ZñÑáéíóúÁÉÍÓÚ\s]+$/.test(key)) {
+      setMessage({ text: "Solo se permiten valores alfabéticos en los árboles.", tone: "warn" })
       return
     }
 
@@ -396,13 +488,58 @@ export default function App() {
 
   const searchSequential = async () => {
     if (busy || !rows) return
-    const key = searchInput.trim()
+    const key = keyInput.trim()
     if (!key) {
       setMessage({ text: "Escribe una clave para buscar.", tone: "warn" })
       return
     }
     setBusy(true)
     setMessage({ text: `Buscando "${key}"…`, tone: "info" })
+
+    const n = rows.length
+    const numBlocks = Math.ceil(Math.sqrt(n))
+    const blockSize = Math.ceil(n / numBlocks) || 1
+
+    if (isExternal) {
+      let currentRows = rows.map((r) => ({ ...r, inactive: false }))
+      
+      for (let b = 0; b < numBlocks; b++) {
+        let startIdx = b * blockSize;
+        let endIdx = Math.min((b + 1) * blockSize, n) - 1;
+        
+        let hasData = false;
+        for (let i = startIdx; i <= endIdx; i++) {
+           if (currentRows[i].key !== "") { hasData = true; break; }
+        }
+        if (!hasData) continue;
+
+        setMessage({ text: `Cargando Bloque ${b + 1} a memoria...`, tone: "info" });
+        setActive({ pos: currentRows[startIdx].pos, state: "compare" });
+        await sleep(1000);
+
+        for (let i = startIdx; i <= endIdx; i++) {
+           if (!isHash && currentRows[i].key === "") break;
+           
+           setActive({ pos: currentRows[i].pos, state: "compare" })
+           await sleep(320)
+
+           if (currentRows[i].key === key) {
+             setActive({ pos: currentRows[i].pos, state: "match" })
+             setMessage({ text: `Clave "${key}" encontrada en Bloque ${b + 1} (posición ${currentRows[i].pos}).`, tone: "ok" })
+             setBusy(false)
+             return
+           }
+        }
+        
+        for (let i = startIdx; i <= endIdx; i++) currentRows[i].inactive = true;
+        setRows([...currentRows]);
+      }
+      
+      setMessage({ text: `La clave "${key}" no se encuentra en el arreglo.`, tone: "warn" })
+      setActive(null)
+      setBusy(false)
+      return
+    }
 
     for (let i = 0; i < rows.length; i++) {
       if (!isHash && rows[i].key === "") {
@@ -433,7 +570,7 @@ export default function App() {
 
   const searchHash = async () => {
     if (busy || !rows) return
-    const key = searchInput.trim()
+    const key = keyInput.trim()
     if (!key) {
       setMessage({ text: "Escribe una clave para buscar.", tone: "warn" })
       return
@@ -576,34 +713,22 @@ export default function App() {
       setActive({ pos, state: "collide" })
       setMessage({ text: `Posición ${pos} ocupada por otra clave. Resolviendo colisión...`, tone: "warn" })
       
-      currentSteps.push(
-        <div key={`col_detect_${attempts}`} className="mb-2">
-          <p className="mb-1 font-semibold text-[#a23b2a]">Intento {attempts + 2}: Colisión en posición {pos}</p>
-          <p className="text-sm text-[#52241A]/80 ml-2">Resolviendo mediante <strong>{collision}</strong>...</p>
-        </div>
-      )
-      setHashExplanation({ title: `Búsqueda Hash: ${hashAlgo}`, steps: [...currentSteps] })
-
       await sleep(600)
 
+      let oldPos = pos
       attempts++
+      let formula = ""
       if (collision === "Solución Lineal") {
         pos = (pos % N) + 1
+        formula = `(${oldPos} mod ${N}) + 1`
       } else if (collision === "Solución Cuadrática") {
         pos = ((pos - 1 + attempts * attempts) % N) + 1
+        formula = `((${oldPos} - 1 + ${attempts}²) mod ${N}) + 1`
       } else if (collision === "Doble Función Hash") {
         const step = computeSecondaryHash(k, doubleHash, N)
         pos = ((pos - 1 + step) % N) + 1
+        formula = `((${oldPos} - 1 + ${step}) mod ${N}) + 1`
       }
-
-      currentSteps.push(
-        <div key={`col_resolve_${attempts}`} className="mb-4 ml-2 border-l-2 border-[#E6B793] pl-3">
-          <p className="text-sm text-[#52241A]/80">
-            Nueva posición a revisar: <span className="font-bold text-[#a23b2a]">{pos}</span>
-          </p>
-        </div>
-      )
-      setHashExplanation({ title: `Búsqueda Hash: ${hashAlgo}`, steps: [...currentSteps] })
     }
 
     if (!found) {
@@ -616,7 +741,7 @@ export default function App() {
 
   const searchBinary = async () => {
     if (busy || !rows) return
-    const key = searchInput.trim()
+    const key = keyInput.trim()
     if (!key) {
       setMessage({ text: "Escribe una clave para buscar.", tone: "warn" })
       return
@@ -663,16 +788,91 @@ export default function App() {
       return
     }
 
+    setRows([...currentRows])
+    await sleep(400)
+
     let found = false
+    const n = currentRows.length
+    const numBlocks = Math.ceil(Math.sqrt(n))
+    const blockSize = Math.ceil(n / numBlocks) || 1
+
+    if (isExternal) {
+      let blockLeft = 0;
+      let blockRight = numBlocks - 1;
+      let targetBlock = -1;
+
+      while (blockLeft <= blockRight) {
+        let blockMid = Math.floor((blockLeft + blockRight) / 2);
+        let startIdx = blockMid * blockSize;
+        let endIdx = Math.min((blockMid + 1) * blockSize, n) - 1;
+
+        while (endIdx >= startIdx && currentRows[endIdx].key === "") endIdx--;
+        if (endIdx < startIdx) {
+          blockRight = blockMid - 1;
+          continue;
+        }
+
+        let minVal = parseInt(currentRows[startIdx].key, 10);
+        let maxVal = parseInt(currentRows[endIdx].key, 10);
+        
+        setMessage({ text: `Evaluando Bloque ${blockMid + 1} (Rango: ${minVal} - ${maxVal})`, tone: "info" });
+        setSplitRange({ left: currentRows[startIdx].pos, mid: currentRows[endIdx].pos, right: currentRows[endIdx].pos, activeHalf: "left" });
+        await sleep(1000);
+        setSplitRange(null);
+
+        if (targetVal >= minVal && targetVal <= maxVal) {
+          targetBlock = blockMid;
+          break;
+        } else if (targetVal < minVal) {
+          blockRight = blockMid - 1;
+          for(let b = blockMid; b <= numBlocks - 1; b++) {
+            let s = b * blockSize;
+            let e = Math.min((b + 1) * blockSize, n) - 1;
+            for(let i=s; i<=e; i++) currentRows[i].inactive = true;
+          }
+          setRows([...currentRows]);
+        } else {
+          blockLeft = blockMid + 1;
+          for(let b = 0; b <= blockMid; b++) {
+            let s = b * blockSize;
+            let e = Math.min((b + 1) * blockSize, n) - 1;
+            for(let i=s; i<=e; i++) currentRows[i].inactive = true;
+          }
+          setRows([...currentRows]);
+        }
+      }
+
+      if (targetBlock === -1) {
+        setMessage({ text: `La clave "${key}" no se encuentra en ningún bloque válido.`, tone: "warn" });
+        setActive(null);
+        setBusy(false);
+        return;
+      }
+
+      setMessage({ text: `Clave en rango del Bloque ${targetBlock + 1}. Iniciando búsqueda binaria interna...`, tone: "info" });
+      await sleep(1000);
+      left = targetBlock * blockSize;
+      right = Math.min((targetBlock + 1) * blockSize, n) - 1;
+      while (right >= left && currentRows[right].key === "") right--;
+    }
 
     while (left <= right) {
       const mid = Math.floor((left + right) / 2)
       const midVal = parseInt(currentRows[mid].key, 10)
 
       setMessage({
-        text: `Partición actual: [Pos ${currentRows[left].pos} a ${currentRows[right].pos}] - Evaluando mitad: Pos ${currentRows[mid].pos}`,
+        text: `Buscando: [Pos ${currentRows[left].pos} a ${currentRows[right].pos}] - Mitad: Pos ${currentRows[mid].pos}`,
         tone: "info",
       })
+
+      for (let flash = 0; flash < 2; flash++) {
+        setSplitRange({ left: currentRows[left].pos, mid: currentRows[mid].pos, right: currentRows[right].pos, activeHalf: "left" })
+        await sleep(550)
+        setSplitRange({ left: currentRows[left].pos, mid: currentRows[mid].pos, right: currentRows[right].pos, activeHalf: "right" })
+        await sleep(550)
+      }
+      setSplitRange(null)
+      await sleep(300)
 
       setActive({ pos: currentRows[mid].pos, state: "compare" })
       await sleep(600)
@@ -680,7 +880,7 @@ export default function App() {
       if (midVal === targetVal) {
         setActive({ pos: currentRows[mid].pos, state: "match" })
         setMessage({
-          text: `¡Clave "${key}" encontrada en la posición ${currentRows[mid].pos}!`,
+          text: `Clave "${key}" encontrada en la posición ${currentRows[mid].pos}.`,
           tone: "ok",
         })
         found = true
@@ -829,7 +1029,7 @@ export default function App() {
           
           setRows((prev) => {
             if (!prev) return prev
-            const newRows = [...prev]
+            let newRows = [...prev]
             if (parts.length > 1) {
               const newParts = [...parts]
               newParts.splice(foundIdx, 1)
@@ -838,6 +1038,8 @@ export default function App() {
             } else {
               newRows[rowIdx] = { ...newRows[rowIdx], key: "" }
             }
+            
+            newRows = rehashInstantly(newRows, hashAlgo, collision, doubleHash)
             return newRows
           })
           
@@ -915,6 +1117,120 @@ export default function App() {
     setBusy(true)
     setMessage({ text: `Borrando "${key}"…`, tone: "info" })
 
+    if (activeOption === "Binaria") {
+      let isSorted = true
+      let previousValue = -Infinity
+      const filledRows = rows.filter((r) => r.key !== "")
+      for (const row of filledRows) {
+        const val = parseInt(row.key, 10)
+        if (val < previousValue) {
+          isSorted = false
+          break
+        }
+        previousValue = val
+      }
+
+      if (!isSorted) {
+        setMessage({
+          text: "Error: El arreglo DEBE estar ordenado para usar Búsqueda Binaria.",
+          tone: "warn",
+        })
+        setBusy(false)
+        return
+      }
+
+      let currentRows = rows.map((r) => ({ ...r, inactive: false }))
+      let left = 0
+      let right = currentRows.length - 1
+
+      while (right >= 0 && currentRows[right].key === "") {
+        currentRows[right].inactive = true
+        right--
+      }
+
+      if (right < 0) {
+        setMessage({ text: "El arreglo está vacío.", tone: "warn" })
+        setBusy(false)
+        return
+      }
+
+      setRows([...currentRows])
+      await sleep(400)
+
+      let foundIndex = -1
+      const targetVal = parseInt(key, 10)
+
+      while (left <= right) {
+        const mid = Math.floor((left + right) / 2)
+        const midVal = parseInt(currentRows[mid].key, 10)
+
+        setMessage({
+          text: `Buscando para borrar: [Pos ${currentRows[left].pos} a ${currentRows[right].pos}] - Mitad: Pos ${currentRows[mid].pos}`,
+          tone: "info",
+        })
+
+        for (let flash = 0; flash < 2; flash++) {
+          setSplitRange({ left: currentRows[left].pos, mid: currentRows[mid].pos, right: currentRows[right].pos, activeHalf: "left" })
+          await sleep(550)
+          setSplitRange({ left: currentRows[left].pos, mid: currentRows[mid].pos, right: currentRows[right].pos, activeHalf: "right" })
+          await sleep(550)
+        }
+        setSplitRange(null)
+        await sleep(300)
+
+        setActive({ pos: currentRows[mid].pos, state: "compare" })
+        await sleep(600)
+
+        if (midVal === targetVal) {
+          foundIndex = mid
+          break
+        }
+
+        if (midVal < targetVal) {
+          for (let i = left; i <= mid; i++) {
+            currentRows[i].inactive = true
+          }
+          left = mid + 1
+        } else {
+          for (let i = mid; i <= right; i++) {
+            currentRows[i].inactive = true
+          }
+          right = mid - 1
+        }
+
+        setRows([...currentRows])
+        await sleep(500)
+      }
+
+      if (foundIndex !== -1) {
+        setActive({ pos: currentRows[foundIndex].pos, state: "match" })
+        await sleep(400)
+        setRows((prev) => {
+          if (!prev) return prev
+          const newRows = [...prev].map(r => ({ ...r, inactive: false }))
+          newRows[foundIndex] = { ...newRows[foundIndex], key: "" }
+          const allKeys = newRows.filter((r) => r.key !== "").map((r) => r.key)
+          for (let j = 0; j < newRows.length; j++) {
+            newRows[j] = { ...newRows[j], key: j < allKeys.length ? allKeys[j] : "" }
+          }
+          return newRows
+        })
+        setMessage({
+          text: `Clave "${key}" borrada de la posición ${currentRows[foundIndex].pos}.`,
+          tone: "ok",
+        })
+        setKeyInput("")
+      } else {
+        setMessage({
+          text: `La clave "${key}" no existe en el arreglo.`,
+          tone: "warn",
+        })
+      }
+      setActive(null)
+      setBusy(false)
+      return
+    }
+
     for (let i = 0; i < rows.length; i++) {
       setActive({ pos: rows[i].pos, state: "compare" })
       await sleep(320)
@@ -956,6 +1272,10 @@ export default function App() {
     const key = keyInput.trim()
     if (!key) {
       setMessage({ text: "Escribe la clave que deseas insertar.", tone: "warn" })
+      return
+    }
+    if (!/^[a-zA-ZñÑáéíóúÁÉÍÓÚ\s]+$/.test(key)) {
+      setMessage({ text: "Solo se permiten valores alfabéticos en los árboles.", tone: "warn" })
       return
     }
 
@@ -1028,6 +1348,12 @@ export default function App() {
       setMessage({ text: error, tone: "warn" })
       return
     }
+    
+    if (!hashAlgo || !collision || (collision === "Doble Función Hash" && !doubleHash)) {
+      setMessage({ text: "Falta seleccionar algoritmo o método de colisión.", tone: "warn" })
+      return
+    }
+
     setBusy(true)
     setMessage({ text: `Calculando Hash para "${key}"…`, tone: "info" })
 
@@ -1186,17 +1512,6 @@ export default function App() {
             tone: "warn",
           })
 
-          currentSteps.push(
-            <div key="col_resolve" className="mb-4">
-              <p className="mb-1 font-semibold text-[#a23b2a]">
-                2. Colisión detectada en {pos}
-              </p>
-              <p className="text-sm text-[#52241A]/80 ml-2">
-                Resolviendo mediante <strong>{collision}</strong>. La clave se
-                anida en la misma posición.
-              </p>
-            </div>
-          )
           setHashExplanation({
             title: `Algoritmo: ${hashAlgo}`,
             steps: [...currentSteps],
@@ -1229,51 +1544,25 @@ export default function App() {
           tone: "warn",
         })
 
-        currentSteps.push(
-          <div key={`col_detect_${attempts}`} className="mb-2">
-            <p className="mb-1 font-semibold text-[#a23b2a]">
-              {attempts + 2}. Colisión en posición {pos}
-            </p>
-            <p className="text-sm text-[#52241A]/80 ml-2">
-              Resolviendo mediante <strong>{collision}</strong>...
-            </p>
-          </div>
-        )
-        setHashExplanation({
-          title: `Algoritmo: ${hashAlgo}`,
-          steps: [...currentSteps],
-        })
-
         await sleep(600)
 
         currentRow.collidingKey = undefined
         setRows([...currentRows])
 
+        let oldPos = pos
         attempts++
+        let formula = ""
         if (collision === "Solución Lineal") {
           pos = (pos % N) + 1
+          formula = `(${oldPos} mod ${N}) + 1`
         } else if (collision === "Solución Cuadrática") {
           pos = ((pos - 1 + attempts * attempts) % N) + 1
+          formula = `((${oldPos} - 1 + ${attempts}²) mod ${N}) + 1`
         } else if (collision === "Doble Función Hash") {
           const step = computeSecondaryHash(k, doubleHash, N)
           pos = ((pos - 1 + step) % N) + 1
+          formula = `((${oldPos} - 1 + ${step}) mod ${N}) + 1`
         }
-
-        currentSteps.push(
-          <div
-            key={`col_resolve_${attempts}`}
-            className="mb-4 ml-2 border-l-2 border-[#E6B793] pl-3"
-          >
-            <p className="text-sm text-[#52241A]/80">
-              Intento #{attempts}. Nueva posición:{" "}
-              <span className="font-bold text-[#a23b2a]">{pos}</span>
-            </p>
-          </div>
-        )
-        setHashExplanation({
-          title: `Algoritmo: ${hashAlgo}`,
-          steps: [...currentSteps],
-        })
       }
     }
 
@@ -1332,60 +1621,7 @@ export default function App() {
     }
   }
 
-  const sortArray = async () => {
-    if (busy || !rows) return
-    setBusy(true)
-    setMessage({ text: "Ordenando el arreglo…", tone: "info" })
 
-    const currentRows = [...rows]
-
-    const getValue = (key: string) =>
-      key === "" ? Infinity : parseInt(key, 10)
-
-    let lastDataIndex = -1
-    for (let i = currentRows.length - 1; i >= 0; i--) {
-      if (currentRows[i].key !== "") {
-        lastDataIndex = i
-        break
-      }
-    }
-
-    if (lastDataIndex === -1) {
-      setMessage({ text: "No hay datos para ordenar.", tone: "warn" })
-      setBusy(false)
-      return
-    }
-
-    const sortBoundary = lastDataIndex + 1
-    let swapped
-    for (let i = 0; i < sortBoundary - 1; i++) {
-      swapped = false
-      for (let j = 0; j < sortBoundary - i - 1; j++) {
-        setActive({ pos: currentRows[j].pos, state: "compare" })
-        await sleep(200)
-
-        const val1 = getValue(currentRows[j].key)
-        const val2 = getValue(currentRows[j + 1].key)
-
-        if (val1 > val2) {
-          const temp = currentRows[j].key
-          currentRows[j].key = currentRows[j + 1].key
-          currentRows[j + 1].key = temp
-
-          setRows([...currentRows])
-          swapped = true
-
-          setActive({ pos: currentRows[j + 1].pos, state: "insert" })
-          await sleep(200)
-        }
-      }
-      if (!swapped) break
-    }
-
-    setMessage({ text: "Arreglo ordenado con éxito.", tone: "ok" })
-    setActive(null)
-    setBusy(false)
-  }
 
   const hasData = rows ? rows.some((r) => r.key !== "") : false
 
@@ -1437,11 +1673,14 @@ export default function App() {
                     setMessage(null)
                     setHashExplanation(null)
                   }}
+                  onSave={handleSave}
+                  onOpen={handleOpen}
                 />
               ) : (
                 <TopControls
                   isHash={isHash}
                   hasData={!!rows && rows.length > 0}
+                  hasInsertedData={hasInsertedData}
                   busy={busy}
                   keySize={keySize}
                   setKeySize={setKeySize}
@@ -1458,6 +1697,8 @@ export default function App() {
                     setActive(null)
                     setMessage(null)
                   }}
+                  onSave={handleSave}
+                  onOpen={handleOpen}
                 />
               )}
 
@@ -1465,7 +1706,7 @@ export default function App() {
                 {isTree ? (
                   <TreeView treeData={treeData} />
                 ) : (
-                  <TableView rows={rows} active={active} isHash={isHash} collision={collision} />
+                  <TableView rows={rows} active={active} isHash={isHash} collision={collision} splitRange={splitRange} isExternal={isExternal} />
                 )}
 
                 <HashExplanation
@@ -1481,8 +1722,6 @@ export default function App() {
                   treeAlgo={treeAlgo}
                   keyInput={keyInput}
                   setKeyInput={setKeyInput}
-                  searchInput={searchInput}
-                  setSearchInput={setSearchInput}
                   insertKey={insertKeyToTree}
                   deleteKey={deleteKeyFromTree}
                   searchKey={handleTreeSearch}
@@ -1494,14 +1733,11 @@ export default function App() {
                   hasRows={!!rows && rows.length > 0}
                   keyInput={keyInput}
                   setKeyInput={setKeyInput}
-                  searchInput={searchInput}
-                  setSearchInput={setSearchInput}
                   insertHash={() => insertHash()}
                   insertSequential={() => insertSequential()}
                   insertAuto={insertAuto}
                   deleteSequential={deleteSequential}
                   handleSearch={isHash ? searchHash : handleSearch}
-                  sortArray={sortArray}
                   hashAlgo={hashAlgo}
                   collision={collision}
                   requestChange={requestChange}
