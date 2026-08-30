@@ -38,7 +38,7 @@ export const SECTIONS: Section[] = [
     id: "externas",
     label: "Búsquedas Externas",
     icon: "M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4",
-    options: ["Secuencial", "Binaria", "Transformaciones de Claves"],
+    options: ["Secuencial", "Binaria", "Transformaciones de Claves", "Búsquedas Dinámicas"],
   },
   {
     id: "grafos",
