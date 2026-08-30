@@ -60,7 +60,8 @@ export default function App() {
   const current = SECTIONS.find((s) => s.id === activeSection)!
   const isTableView =
     (activeSection === "internas" || activeSection === "externas") &&
-    activeOption !== "Árboles de Búsqueda"
+    activeOption !== "Árboles de Búsqueda" &&
+    activeOption !== "Búsquedas Dinámicas"
   const isHash = activeOption === "Transformaciones de Claves"
   const isTree = activeOption === "Árboles de Búsqueda"
   const isExternal = activeSection === "externas"
@@ -106,7 +107,24 @@ export default function App() {
   }
 
   const requestChange = (change: PendingChange) => {
-    if (hasInsertedData) {
+    let showModal = false
+
+    if (change.type === "section") {
+      const isCurrentTree = activeOption === "Árboles de Búsqueda"
+      const isNewTree = change.option === "Árboles de Búsqueda"
+      
+      if (isCurrentTree && !isNewTree && !!treeData) {
+        showModal = true
+      } else if (!isCurrentTree && isNewTree && hasInsertedData) {
+        showModal = true
+      } else if (!isCurrentTree && !isNewTree && hasInsertedData) {
+        showModal = true
+      }
+    } else {
+      if (hasInsertedData) showModal = true
+    }
+
+    if (showModal) {
       setPendingChange(change)
     } else {
       applyChange(change, false)
@@ -188,15 +206,18 @@ export default function App() {
       setRows(null)
       return
     }
-    const capped = Math.min(size, 2000)
+    
+    let finalSize = size
+    if (isExternal) {
+      const numBlocks = Math.ceil(Math.sqrt(size))
+      const blockSize = Math.ceil(size / numBlocks) || 1
+      finalSize = numBlocks * blockSize
+    }
 
-    const numBlocks = Math.ceil(Math.sqrt(capped))
-    const blockSize = Math.ceil(capped / numBlocks) || 1
-    const adjustedSize = numBlocks * blockSize
-
-    setRows(Array.from({ length: adjustedSize }, (_, i) => ({ pos: i + 1, key: "" })))
+    setRows(Array.from({ length: finalSize }, (_, i) => ({ pos: i + 1, key: "" })))
     setActive(null)
     setMessage(null)
+    setHashExplanation(null)
   }
 
   const handleSave = () => {
@@ -215,16 +236,23 @@ export default function App() {
       dataToSave = { type: "array", data: rows, size: arraySizeInput }
     }
     
+    let fileName = window.prompt("Ingrese el nombre del archivo para guardar:", `datos_${isTree ? "arbol" : "arreglo"}`)
+    if (!fileName) return // El usuario canceló o dejó en blanco
+    
+    if (!fileName.endsWith('.json')) {
+      fileName += '.json'
+    }
+
     const blob = new Blob([JSON.stringify(dataToSave, null, 2)], { type: "application/json" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = `data_${isTree ? "tree" : "array"}.json`
+    a.download = fileName
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-    setMessage({ text: "Datos guardados exitosamente.", tone: "ok" })
+    setMessage({ text: `Datos guardados exitosamente como ${fileName}.`, tone: "ok" })
   }
 
   const handleOpen = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -607,8 +635,10 @@ export default function App() {
       )
     } else if (hashAlgo === "Hash Cuadrado") {
       const sq = (k * k).toString()
-      const mid = Math.floor(sq.length / 2)
-      const digits = sq.substring(Math.max(0, mid - 1), mid + 1)
+      const numDigits = Math.max(1, N.toString().length - 1)
+      let startIdx = Math.floor((sq.length - numDigits) / 2)
+      if (startIdx < 0) startIdx = 0
+      const digits = sq.substring(startIdx, startIdx + numDigits)
       const extractedVal = parseInt(digits || "0", 10)
       const needsMod = extractedVal >= N
       initialExplanation = (
@@ -952,8 +982,10 @@ export default function App() {
         )
       } else if (hashAlgo === "Hash Cuadrado") {
         const sq = (k * k).toString()
-        const mid = Math.floor(sq.length / 2)
-        const digits = sq.substring(Math.max(0, mid - 1), mid + 1)
+        const numDigits = Math.max(1, N.toString().length - 1)
+        let startIdx = Math.floor((sq.length - numDigits) / 2)
+        if (startIdx < 0) startIdx = 0
+        const digits = sq.substring(startIdx, startIdx + numDigits)
         const extractedVal = parseInt(digits || "0", 10)
         const needsMod = extractedVal >= N
         initialExplanation = (
@@ -1384,8 +1416,10 @@ export default function App() {
       )
     } else if (hashAlgo === "Hash Cuadrado") {
       const sq = (k * k).toString()
-      const mid = Math.floor(sq.length / 2)
-      const digits = sq.substring(Math.max(0, mid - 1), mid + 1)
+      const numDigits = Math.max(1, N.toString().length - 1)
+      let startIdx = Math.floor((sq.length - numDigits) / 2)
+      if (startIdx < 0) startIdx = 0
+      const digits = sq.substring(startIdx, startIdx + numDigits)
       const extractedVal = parseInt(digits || "0", 10)
       const needsMod = extractedVal >= N
       initialExplanation = (
@@ -1656,7 +1690,9 @@ export default function App() {
                 {activeOption}
               </h2>
               <p className="mt-3 max-w-md text-sm text-[#52241A]/55">
-                El contenido de esta sección se mostrará aquí.
+                {activeOption === "Búsquedas Dinámicas" 
+                  ? "Esta sección se encuentra en desarrollo y no está funcional por el momento." 
+                  : "El contenido de esta sección se mostrará aquí."}
               </p>
             </div>
           ) : (
@@ -1696,6 +1732,7 @@ export default function App() {
                     setRows(null)
                     setActive(null)
                     setMessage(null)
+                    setHashExplanation(null)
                   }}
                   onSave={handleSave}
                   onOpen={handleOpen}
@@ -1775,7 +1812,14 @@ export default function App() {
         </main>
       </div>
 
-      <ConfirmModal pendingChange={pendingChange} applyChange={applyChange} cancelChange={cancelChange} />
+      <ConfirmModal 
+        pendingChange={pendingChange} 
+        applyChange={applyChange} 
+        cancelChange={cancelChange} 
+        activeOption={activeOption}
+        hasInsertedData={hasInsertedData}
+        hasTreeData={!!treeData}
+      />
     </div>
   )
 }

@@ -6,8 +6,10 @@ export const computeInitialHash = (val: number, algo: string, N: number) => {
   if (algo === "Hash Mod") return (val % N) + 1
   if (algo === "Hash Cuadrado") {
     const sq = (val * val).toString()
-    const mid = Math.floor(sq.length / 2)
-    const digits = sq.substring(Math.max(0, mid - 1), mid + 1)
+    const numDigits = Math.max(1, N.toString().length - 1)
+    let startIdx = Math.floor((sq.length - numDigits) / 2)
+    if (startIdx < 0) startIdx = 0
+    const digits = sq.substring(startIdx, startIdx + numDigits)
     return (parseInt(digits || "0", 10) % N) + 1
   }
   if (algo === "Truncamiento") {
