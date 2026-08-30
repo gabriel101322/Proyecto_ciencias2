@@ -98,30 +98,25 @@ export default function TableView({ rows, active, isHash, isExternal, collision,
       const rightCol = rows.slice(half)
 
       const globalVisibleIndices = new Set<number>()
-      if (n > 40) {
-        for (let i = 0; i < 3 && i < half; i++) globalVisibleIndices.add(i)
-        for (let i = half - 1; i >= half - 3 && i >= 0; i--) globalVisibleIndices.add(i)
-        if (half > 0) {
-          const midIdx = Math.floor(half / 2)
-          for (let offset = -1; offset <= 1; offset++) {
-            const targetIdx = midIdx + offset
-            if (targetIdx >= 0 && targetIdx < half) globalVisibleIndices.add(targetIdx)
-          }
-        }
-        rows.forEach((r, absoluteIdx) => {
-          if (r.key !== "" || r.pos === active?.pos) {
-            const localIdx = absoluteIdx % half
-            globalVisibleIndices.add(localIdx)
-          }
-        })
+      
+      if (n > 0) {
+        globalVisibleIndices.add(0)
+        globalVisibleIndices.add(n - 1)
       }
 
-      const processColumn = (col: Row[], prefix: string): DisplayItem[] => {
-        if (n <= 40) return col.map((r) => ({ type: "row", data: r }))
+      rows.forEach((r, absoluteIdx) => {
+        if (r.key !== "" || r.pos === active?.pos) {
+          globalVisibleIndices.add(absoluteIdx)
+        }
+      })
+
+      const processColumn = (col: Row[], prefix: string, startAbsoluteIdx: number): DisplayItem[] => {
+        if (n <= 20) return col.map((r) => ({ type: "row", data: r }))
         const result: DisplayItem[] = []
         let lastWasVisible = true
         col.forEach((r, localIdx) => {
-          if (globalVisibleIndices.has(localIdx)) {
+          const absoluteIdx = startAbsoluteIdx + localIdx
+          if (globalVisibleIndices.has(absoluteIdx)) {
             result.push({ type: "row", data: r })
             lastWasVisible = true
           } else {
@@ -134,8 +129,8 @@ export default function TableView({ rows, active, isHash, isExternal, collision,
         return result
       }
 
-      renderGroups.push({ items: processColumn(leftCol, "L") })
-      renderGroups.push({ items: processColumn(rightCol, "R") })
+      renderGroups.push({ items: processColumn(leftCol, "L", 0) })
+      renderGroups.push({ items: processColumn(rightCol, "R", half) })
     }
   }
 

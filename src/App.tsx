@@ -206,13 +206,18 @@ export default function App() {
       setRows(null)
       return
     }
-    const numBlocks = Math.ceil(Math.sqrt(size))
-    const blockSize = Math.ceil(size / numBlocks) || 1
-    const adjustedSize = numBlocks * blockSize
+    
+    let finalSize = size
+    if (isExternal) {
+      const numBlocks = Math.ceil(Math.sqrt(size))
+      const blockSize = Math.ceil(size / numBlocks) || 1
+      finalSize = numBlocks * blockSize
+    }
 
-    setRows(Array.from({ length: adjustedSize }, (_, i) => ({ pos: i + 1, key: "" })))
+    setRows(Array.from({ length: finalSize }, (_, i) => ({ pos: i + 1, key: "" })))
     setActive(null)
     setMessage(null)
+    setHashExplanation(null)
   }
 
   const handleSave = () => {
@@ -630,8 +635,10 @@ export default function App() {
       )
     } else if (hashAlgo === "Hash Cuadrado") {
       const sq = (k * k).toString()
-      const mid = Math.floor(sq.length / 2)
-      const digits = sq.substring(Math.max(0, mid - 1), mid + 1)
+      const numDigits = Math.max(1, N.toString().length - 1)
+      let startIdx = Math.floor((sq.length - numDigits) / 2)
+      if (startIdx < 0) startIdx = 0
+      const digits = sq.substring(startIdx, startIdx + numDigits)
       const extractedVal = parseInt(digits || "0", 10)
       const needsMod = extractedVal >= N
       initialExplanation = (
@@ -975,8 +982,10 @@ export default function App() {
         )
       } else if (hashAlgo === "Hash Cuadrado") {
         const sq = (k * k).toString()
-        const mid = Math.floor(sq.length / 2)
-        const digits = sq.substring(Math.max(0, mid - 1), mid + 1)
+        const numDigits = Math.max(1, N.toString().length - 1)
+        let startIdx = Math.floor((sq.length - numDigits) / 2)
+        if (startIdx < 0) startIdx = 0
+        const digits = sq.substring(startIdx, startIdx + numDigits)
         const extractedVal = parseInt(digits || "0", 10)
         const needsMod = extractedVal >= N
         initialExplanation = (
@@ -1407,8 +1416,10 @@ export default function App() {
       )
     } else if (hashAlgo === "Hash Cuadrado") {
       const sq = (k * k).toString()
-      const mid = Math.floor(sq.length / 2)
-      const digits = sq.substring(Math.max(0, mid - 1), mid + 1)
+      const numDigits = Math.max(1, N.toString().length - 1)
+      let startIdx = Math.floor((sq.length - numDigits) / 2)
+      if (startIdx < 0) startIdx = 0
+      const digits = sq.substring(startIdx, startIdx + numDigits)
       const extractedVal = parseInt(digits || "0", 10)
       const needsMod = extractedVal >= N
       initialExplanation = (
@@ -1721,6 +1732,7 @@ export default function App() {
                     setRows(null)
                     setActive(null)
                     setMessage(null)
+                    setHashExplanation(null)
                   }}
                   onSave={handleSave}
                   onOpen={handleOpen}
