@@ -38,12 +38,17 @@ export const rehashInstantly = (
   currentRows: Row[],
   algo: string,
   coll: string,
-  double: string
+  double: string,
+  isExternal: boolean = false
 ) => {
   if (!currentRows || currentRows.length === 0 || !algo || !coll) return currentRows;
   if (coll === "Doble Función Hash" && !double) return currentRows;
 
-  const N = currentRows.length;
+  const nTotal = currentRows.length;
+  const numBlocks = Math.ceil(Math.sqrt(nTotal));
+  const blockSize = Math.ceil(nTotal / numBlocks) || 1;
+  const N = isExternal ? numBlocks : nTotal;
+
   // Extraer claves actuales
   const allKeys: string[] = [];
   currentRows.forEach((r) => {
@@ -56,7 +61,7 @@ export const rehashInstantly = (
   });
 
   // Crear arreglo vacío
-  const newRows = Array.from({ length: N }, (_, i) => ({
+  const newRows = Array.from({ length: nTotal }, (_, i) => ({
     pos: i + 1,
     key: "",
     inactive: false,
@@ -69,30 +74,60 @@ export const rehashInstantly = (
     let attempts = 0;
     let inserted = false;
 
-    while (attempts < N) {
-      const rowIdx = pos - 1;
-      const currentRow = newRows[rowIdx];
+    if (isExternal) {
+      while (attempts < N) {
+        let b = pos - 1;
+        if (b >= numBlocks) b = numBlocks - 1;
 
-      if (currentRow.key === "") {
-        currentRow.key = key;
-        inserted = true;
-        break;
-      } else {
-        if (coll === "Lista Enlazada" || coll === "Arreglo Anidado") {
-          currentRow.key =
-            currentRow.key + (coll === "Lista Enlazada" ? " -> " : ", ") + key;
-          inserted = true;
-          break;
+        let startIdx = b * blockSize;
+        let endIdx = Math.min((b + 1) * blockSize, nTotal) - 1;
+
+        for (let i = startIdx; i <= endIdx; i++) {
+          if (newRows[i].key === "") {
+            newRows[i].key = key;
+            inserted = true;
+            break;
+          }
         }
 
+        if (inserted) break;
+
         attempts++;
-        if (coll === "Solución Lineal") {
+        if (coll === "Solución Lineal" || coll === "Lista Enlazada" || coll === "Arreglo Anidado") {
           pos = (pos % N) + 1;
         } else if (coll === "Solución Cuadrática") {
           pos = ((pos - 1 + attempts * attempts) % N) + 1;
         } else if (coll === "Doble Función Hash") {
           const step = computeSecondaryHash(k, double, N);
           pos = ((pos - 1 + step) % N) + 1;
+        }
+      }
+    } else {
+      while (attempts < N) {
+        const rowIdx = pos - 1;
+        const currentRow = newRows[rowIdx];
+
+        if (currentRow.key === "") {
+          currentRow.key = key;
+          inserted = true;
+          break;
+        } else {
+          if (coll === "Lista Enlazada" || coll === "Arreglo Anidado") {
+            currentRow.key =
+              currentRow.key + (coll === "Lista Enlazada" ? " -> " : ", ") + key;
+            inserted = true;
+            break;
+          }
+
+          attempts++;
+          if (coll === "Solución Lineal") {
+            pos = (pos % N) + 1;
+          } else if (coll === "Solución Cuadrática") {
+            pos = ((pos - 1 + attempts * attempts) % N) + 1;
+          } else if (coll === "Doble Función Hash") {
+            const step = computeSecondaryHash(k, double, N);
+            pos = ((pos - 1 + step) % N) + 1;
+          }
         }
       }
     }
