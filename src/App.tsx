@@ -17,7 +17,10 @@ import { TopTreeControls, BottomTreeControls } from "./components/TreeControls"
 import HashExplanation from "./components/HashExplanation"
 import ConfirmModal from "./components/ConfirmModal"
 import HuffmanExplanation from "./components/HuffmanExplanation"
+import DynamicTableView from "./components/DynamicTableView"
+import DynamicLogicPanel from "./components/DynamicLogicPanel"
 import { insertDigitalTree, searchDigitalTree, deleteDigitalTree, insertRadixTree, searchRadixTree, deleteRadixTree, insertMultiRadixTree, searchMultiRadixTree, deleteMultiRadixTree, buildHuffmanTree } from "./utils/treeUtils"
+import { DynamicState, DynamicConfig, insertDynamicKey, deleteDynamicKey } from "./utils/dynamicHashUtils"
 
 export default function App() {
   const [collapsed, setCollapsed] = useState(false)
@@ -28,6 +31,23 @@ export default function App() {
   const [keySize, setKeySize] = useState(1)
   const [arraySizeInput, setArraySizeInput] = useState("")
   const [rows, setRows] = useState<Row[] | null>(null)
+
+  // ── Estado Búsquedas Dinámicas ──────────────────────
+  const [dynamicConfig, setDynamicConfig] = useState<DynamicConfig>({
+    initialBuckets: 2,
+    recordsPerBucket: 3,
+    expThreshold: 85,
+    redThreshold: 105,
+    isPartial: false
+  })
+  const [dynamicState, setDynamicState] = useState<DynamicState | null>(null)
+  const [animatingDynamic, setAnimatingDynamic] = useState<{
+    isAnimating: boolean
+    oldState: DynamicState
+    newState: DynamicState
+  } | null>(null)
+
+  // ── Estado Hashing (Transformación de Claves) ───────
   const [keyInput, setKeyInput] = useState("")
   const [huffmanText, setHuffmanText] = useState("")
   const [hashAlgo, setHashAlgo] = useState("")
@@ -66,7 +86,7 @@ export default function App() {
   const isTree = activeOption === "Árboles de Búsqueda"
   const isExternal = activeSection === "externas"
 
-  const hasInsertedData = !!rows && rows.some((r) => r.key !== "")
+  const hasInsertedData = !!((rows && rows.some(r => r.key !== "")) || treeData || (dynamicState && dynamicState.keys.length > 0))
 
   const triggerRehash = (algo: string, coll: string, double: string) => {
     if (!algo || !coll || (coll === "Doble Función Hash" && !double)) return
@@ -89,7 +109,7 @@ export default function App() {
 
     setRows((prev) => {
       if (!prev || prev.length === 0) return prev
-      return rehashInstantly(prev, algo, coll, double)
+      return rehashInstantly(prev, algo, coll, double, isExternal)
     })
   }
 
@@ -139,6 +159,7 @@ export default function App() {
       if (!keepArray) {
         setRows(null)
         setArraySizeInput("")
+        setDynamicState(null)
       } else if (rows) {
         const allKeys: string[] = []
         rows.forEach((r) => {
@@ -177,6 +198,11 @@ export default function App() {
       if (change.sectionId) {
         setActiveSection(change.sectionId)
       }
+      const isDynamic = change.option.startsWith("Búsquedas Dinámicas")
+      if (isDynamic) {
+        setDynamicState(null)
+      }
+      
       setActiveOption(change.option)
       setPendingChange(null)
       setMessage(null)
@@ -421,8 +447,6 @@ export default function App() {
     }
     
     setTreeData(result.newRoot)
-    // Digital and Radix Tree don't explicitly return `found` in their current types in some signatures, but they delete if they reach the leaf. We just check if tree changed, or just say OK.
-    // For Multi Radix, it returns found.
     if (result.found !== false) {
       setMessage({ text: `Intentando borrar "${key}" completado.`, tone: "ok" })
       setKeyInput("")
@@ -485,7 +509,6 @@ export default function App() {
       }
     }
     
-    // Fallback detection logic if `found` wasn't explicitly returned
     const lastFrame = result.frames && result.frames.length > 0 ? result.frames[result.frames.length - 1] : null;
     const isFound = result.found !== undefined ? result.found : (lastFrame && lastFrame.description.includes("encontrada"));
 
@@ -495,7 +518,6 @@ export default function App() {
       setMessage({ text: `La clave "${key}" no se encuentra en el árbol.`, tone: "warn" })
     }
     
-    // Clear visual search state after a delay
     await sleep(2000)
     setTreeData(treeData)
     
@@ -530,37 +552,54 @@ export default function App() {
 
     if (isExternal) {
       let currentRows = rows.map((r) => ({ ...r, inactive: false }))
+      const targetVal = parseInt(key, 10)
       
       for (let b = 0; b < numBlocks; b++) {
         let startIdx = b * blockSize;
         let endIdx = Math.min((b + 1) * blockSize, n) - 1;
         
-        let hasData = false;
-        for (let i = startIdx; i <= endIdx; i++) {
-           if (currentRows[i].key !== "") { hasData = true; break; }
+        let lastIdx = endIdx;
+        while (lastIdx >= startIdx && currentRows[lastIdx].key === "") {
+          lastIdx--;
         }
-        if (!hasData) continue;
+        if (lastIdx < startIdx) {
+          for (let i = startIdx; i <= endIdx; i++) currentRows[i].inactive = true;
+          setRows([...currentRows]);
+          continue;
+        }
 
-        setMessage({ text: `Cargando Bloque ${b + 1} a memoria...`, tone: "info" });
-        setActive({ pos: currentRows[startIdx].pos, state: "compare" });
+        let lastVal = parseInt(currentRows[lastIdx].key, 10);
+
+        setMessage({ text: `Evaluando Bloque ${b + 1}...`, tone: "info" });
+        setActive({ pos: currentRows[lastIdx].pos, state: "compare" });
         await sleep(1000);
 
-        for (let i = startIdx; i <= endIdx; i++) {
-           if (!isHash && currentRows[i].key === "") break;
+        if (targetVal > lastVal) {
+           setMessage({ text: `Clave mayor a ${lastVal} (último del bloque). Saltando al siguiente bloque...`, tone: "info" });
+           for (let i = startIdx; i <= endIdx; i++) currentRows[i].inactive = true;
+           setRows([...currentRows]);
+           await sleep(500);
+           continue;
+        } else {
+           setMessage({ text: `Clave <= ${lastVal}. Iniciando búsqueda secuencial en Bloque ${b + 1}...`, tone: "info" });
+           await sleep(1000);
            
-           setActive({ pos: currentRows[i].pos, state: "compare" })
-           await sleep(320)
+           for (let i = startIdx; i <= lastIdx; i++) {
+             setActive({ pos: currentRows[i].pos, state: "compare" })
+             await sleep(320)
 
-           if (currentRows[i].key === key) {
-             setActive({ pos: currentRows[i].pos, state: "match" })
-             setMessage({ text: `Clave "${key}" encontrada en Bloque ${b + 1} (posición ${currentRows[i].pos}).`, tone: "ok" })
-             setBusy(false)
-             return
+             if (currentRows[i].key === key) {
+               setActive({ pos: currentRows[i].pos, state: "match" })
+               setMessage({ text: `Clave "${key}" encontrada en Bloque ${b + 1} (posición ${currentRows[i].pos}).`, tone: "ok" })
+               setBusy(false)
+               return
+             }
            }
+           
+           for (let i = startIdx; i <= endIdx; i++) currentRows[i].inactive = true;
+           setRows([...currentRows]);
+           break;
         }
-        
-        for (let i = startIdx; i <= endIdx; i++) currentRows[i].inactive = true;
-        setRows([...currentRows]);
       }
       
       setMessage({ text: `La clave "${key}" no se encuentra en el arreglo.`, tone: "warn" })
@@ -612,7 +651,10 @@ export default function App() {
     setBusy(true)
     setMessage({ text: `Calculando Hash para buscar "${key}"…`, tone: "info" })
 
-    const N = rows.length
+    const nTotal = rows.length
+    const numBlocks = Math.ceil(Math.sqrt(nTotal))
+    const blockSize = Math.ceil(nTotal / numBlocks) || 1
+    const N = isExternal ? numBlocks : nTotal
     const k = parseInt(key, 10)
 
     let initialExplanation: ReactNode = null
@@ -699,6 +741,67 @@ export default function App() {
     let attempts = 0
     let found = false
 
+    if (isExternal) {
+      while (attempts < N) {
+        let b = pos - 1
+        if (b >= numBlocks) b = numBlocks - 1
+
+        let startIdx = b * blockSize
+        let endIdx = Math.min((b + 1) * blockSize, nTotal) - 1
+
+        setMessage({ text: `Hash = ${pos}. Cargando Bloque ${b + 1} a memoria...`, tone: "info" })
+        await sleep(1000)
+
+        let currentRows = rows.map((r) => ({ ...r, inactive: true }))
+        for (let i = startIdx; i <= endIdx; i++) {
+          currentRows[i].inactive = false
+        }
+        setRows([...currentRows])
+
+        let blockFull = true
+        for (let i = startIdx; i <= endIdx; i++) {
+          if (currentRows[i].key === "") {
+            blockFull = false
+            continue
+          }
+
+          setActive({ pos: currentRows[i].pos, state: "compare" })
+          await sleep(320)
+
+          const parts = currentRows[i].key.split(/, | -> /)
+          if (parts.includes(key)) {
+            setActive({ pos: currentRows[i].pos, state: "match" })
+            setMessage({ text: `Clave "${key}" encontrada en el Bloque ${b + 1} (posición ${currentRows[i].pos}).`, tone: "ok" })
+            found = true
+            break
+          }
+        }
+
+        if (found) break
+
+        if (!blockFull) {
+          break
+        }
+
+        attempts++
+        if (collision === "Solución Lineal" || collision === "Lista Enlazada" || collision === "Arreglo Anidado") {
+          pos = (pos % N) + 1
+        } else if (collision === "Solución Cuadrática") {
+          pos = ((pos - 1 + attempts * attempts) % N) + 1
+        } else if (collision === "Doble Función Hash") {
+          const step = computeSecondaryHash(k, doubleHash, N)
+          pos = ((pos - 1 + step) % N) + 1
+        }
+      }
+
+      if (!found) {
+        setMessage({ text: `La clave "${key}" no se encuentra en la tabla externa.`, tone: "warn" })
+        setActive(null)
+      }
+      setBusy(false)
+      return
+    }
+
     while (attempts < N) {
       setActive({ pos, state: "compare" })
       await sleep(400)
@@ -747,17 +850,13 @@ export default function App() {
 
       let oldPos = pos
       attempts++
-      let formula = ""
       if (collision === "Solución Lineal") {
         pos = (pos % N) + 1
-        formula = `(${oldPos} mod ${N}) + 1`
       } else if (collision === "Solución Cuadrática") {
         pos = ((pos - 1 + attempts * attempts) % N) + 1
-        formula = `((${oldPos} - 1 + ${attempts}²) mod ${N}) + 1`
       } else if (collision === "Doble Función Hash") {
         const step = computeSecondaryHash(k, doubleHash, N)
         pos = ((pos - 1 + step) % N) + 1
-        formula = `((${oldPos} - 1 + ${step}) mod ${N}) + 1`
       }
     }
 
@@ -961,7 +1060,10 @@ export default function App() {
       setBusy(true)
       setMessage({ text: `Calculando Hash para borrar "${key}"…`, tone: "info" })
 
-      const N = rows.length
+      const nTotal = rows.length
+      const numBlocks = Math.ceil(Math.sqrt(nTotal))
+      const blockSize = Math.ceil(nTotal / numBlocks) || 1
+      const N = isExternal ? numBlocks : nTotal
       const k = parseInt(key, 10)
 
       let initialExplanation: ReactNode = null
@@ -1046,6 +1148,86 @@ export default function App() {
       let attempts = 0
       let found = false
 
+      if (isExternal) {
+        while (attempts < N) {
+          let b = pos - 1
+          if (b >= numBlocks) b = numBlocks - 1
+
+          let startIdx = b * blockSize
+          let endIdx = Math.min((b + 1) * blockSize, nTotal) - 1
+
+          setMessage({ text: `Hash = ${pos}. Cargando Bloque ${b + 1} a memoria...`, tone: "info" })
+          await sleep(1000)
+
+          let currentRows = rows.map((r) => ({ ...r, inactive: true }))
+          for (let i = startIdx; i <= endIdx; i++) {
+            currentRows[i].inactive = false
+          }
+          setRows([...currentRows])
+
+          let blockFull = true
+          for (let i = startIdx; i <= endIdx; i++) {
+            if (currentRows[i].key === "") {
+              blockFull = false
+              continue
+            }
+
+            setActive({ pos: currentRows[i].pos, state: "compare" })
+            await sleep(400)
+
+            const parts = currentRows[i].key.split(/, | -> /)
+            const foundIdx = parts.indexOf(key)
+            
+            if (foundIdx !== -1) {
+              setActive({ pos: currentRows[i].pos, state: "match", subIndex: foundIdx })
+              await sleep(400)
+              
+              setRows((prev) => {
+                if (!prev) return prev
+                let newRows = [...prev]
+                if (parts.length > 1) {
+                  const newParts = [...parts]
+                  newParts.splice(foundIdx, 1)
+                  const separator = collision === "Lista Enlazada" ? " -> " : ", "
+                  newRows[i] = { ...newRows[i], key: newParts.join(separator) }
+                } else {
+                  newRows[i] = { ...newRows[i], key: "" }
+                }
+                return newRows
+              })
+
+              setMessage({ text: `¡Clave "${key}" borrada del Bloque ${b + 1}!`, tone: "ok" })
+              setKeyInput("")
+              found = true
+              break
+            }
+          }
+          
+          if (found) break
+
+          if (!blockFull) {
+            break
+          }
+
+          attempts++
+          if (collision === "Solución Lineal" || collision === "Lista Enlazada" || collision === "Arreglo Anidado") {
+            pos = (pos % N) + 1
+          } else if (collision === "Solución Cuadrática") {
+            pos = ((pos - 1 + attempts * attempts) % N) + 1
+          } else if (collision === "Doble Función Hash") {
+            const step = computeSecondaryHash(k, doubleHash, N)
+            pos = ((pos - 1 + step) % N) + 1
+          }
+        }
+
+        if (!found) {
+          setMessage({ text: `La clave "${key}" no se encuentra en la tabla externa.`, tone: "warn" })
+        }
+        setActive(null)
+        setBusy(false)
+        return
+      }
+
       while (attempts < N) {
         setActive({ pos, state: "compare" })
         await sleep(400)
@@ -1071,7 +1253,7 @@ export default function App() {
               newRows[rowIdx] = { ...newRows[rowIdx], key: "" }
             }
             
-            newRows = rehashInstantly(newRows, hashAlgo, collision, doubleHash)
+            newRows = rehashInstantly(newRows, hashAlgo, collision, doubleHash, isExternal)
             return newRows
           })
           
@@ -1314,7 +1496,7 @@ export default function App() {
     setBusy(true)
     setMessage({ text: `Insertando "${key}" en ${treeAlgo}…`, tone: "info" })
     
-    // @ts-ignore - frames will be checked dynamically
+    // @ts-ignore
     let result: { newRoot: TreeNode | null; steps: string[]; frames?: any[]; logicData?: any } = { newRoot: null, steps: [] }
 
     if (treeAlgo === "Búsqueda Digital") {
@@ -1389,7 +1571,10 @@ export default function App() {
     setBusy(true)
     setMessage({ text: `Calculando Hash para "${key}"…`, tone: "info" })
 
-    const N = rows.length
+    const nTotal = rows.length
+    const numBlocks = Math.ceil(Math.sqrt(nTotal))
+    const blockSize = Math.ceil(nTotal / numBlocks) || 1
+    const N = isExternal ? numBlocks : nTotal
     const k = parseInt(key, 10)
 
     let initialExplanation: ReactNode = null
@@ -1510,6 +1695,75 @@ export default function App() {
     let attempts = 0
     let inserted = false
 
+    if (isExternal) {
+      while (attempts < N) {
+        let b = pos - 1
+        if (b >= numBlocks) b = numBlocks - 1
+
+        let startIdx = b * blockSize
+        let endIdx = Math.min((b + 1) * blockSize, nTotal) - 1
+
+        setMessage({ text: `Hash = ${pos}. Cargando Bloque ${b + 1} a memoria...`, tone: "info" })
+        await sleep(1000)
+
+        currentRows = currentRows.map((r) => ({ ...r, inactive: true }))
+        for (let i = startIdx; i <= endIdx; i++) {
+          currentRows[i].inactive = false
+        }
+        setRows([...currentRows])
+
+        let blockFull = true
+        for (let i = startIdx; i <= endIdx; i++) {
+          setActive({ pos: currentRows[i].pos, state: "compare" })
+          await sleep(400)
+
+          const parts = currentRows[i].key.split(/, | -> /)
+          if (parts.includes(key)) {
+            setActive({ pos: currentRows[i].pos, state: "match" })
+            setMessage({ text: `La clave "${key}" ya existe.`, tone: "warn" })
+            inserted = true
+            break
+          }
+
+          if (currentRows[i].key === "") {
+            blockFull = false
+            setActive({ pos: currentRows[i].pos, state: "insert" })
+            currentRows[i].key = key
+            setRows([...currentRows])
+            setMessage({ text: `Clave "${key}" insertada en el Bloque ${b + 1} (posición ${currentRows[i].pos}).`, tone: "ok" })
+            setKeyInput("")
+            await sleep(600)
+            inserted = true
+            break
+          }
+        }
+
+        if (inserted) break
+
+        if (blockFull) {
+          setMessage({ text: `El Bloque ${b + 1} está lleno. Buscando siguiente...`, tone: "warn" })
+          await sleep(600)
+        }
+
+        attempts++
+        if (collision === "Solución Lineal" || collision === "Lista Enlazada" || collision === "Arreglo Anidado") {
+          pos = (pos % N) + 1
+        } else if (collision === "Solución Cuadrática") {
+          pos = ((pos - 1 + attempts * attempts) % N) + 1
+        } else if (collision === "Doble Función Hash") {
+          const step = computeSecondaryHash(k, doubleHash, N)
+          pos = ((pos - 1 + step) % N) + 1
+        }
+      }
+
+      if (!inserted) {
+        setMessage({ text: `La tabla está llena, no se pudo insertar "${key}".`, tone: "warn" })
+      }
+      setActive(null)
+      setBusy(false)
+      return
+    }
+
     while (attempts < N) {
       setActive({ pos, state: "compare" })
       await sleep(400)
@@ -1585,17 +1839,13 @@ export default function App() {
 
         let oldPos = pos
         attempts++
-        let formula = ""
         if (collision === "Solución Lineal") {
           pos = (pos % N) + 1
-          formula = `(${oldPos} mod ${N}) + 1`
         } else if (collision === "Solución Cuadrática") {
           pos = ((pos - 1 + attempts * attempts) % N) + 1
-          formula = `((${oldPos} - 1 + ${attempts}²) mod ${N}) + 1`
         } else if (collision === "Doble Función Hash") {
           const step = computeSecondaryHash(k, doubleHash, N)
           pos = ((pos - 1 + step) % N) + 1
-          formula = `((${oldPos} - 1 + ${step}) mod ${N}) + 1`
         }
       }
     }
@@ -1612,19 +1862,23 @@ export default function App() {
   }
 
   const insertAuto = () => {
-    if (busy || !rows) return
+    if (busy || (!rows && !dynamicState && !treeData)) return
     const min = Math.pow(10, keySize - 1)
     const max = Math.pow(10, keySize) - 1
 
     const existingKeys = new Set<string>()
-    rows.forEach((r) => {
-      if (r.key) {
-        r.key.split(/, | -> /).forEach((k) => existingKeys.add(k.trim()))
-      }
-      if (r.collidingKey) {
-        existingKeys.add(r.collidingKey.trim())
-      }
-    })
+    if (rows) {
+      rows.forEach((r) => {
+        if (r.key) {
+          r.key.split(/, | -> /).forEach((k) => existingKeys.add(k.trim()))
+        }
+        if (r.collidingKey) {
+          existingKeys.add(r.collidingKey.trim())
+        }
+      })
+    } else if (dynamicState) {
+      dynamicState.keys.forEach((k) => existingKeys.add(k.toString()))
+    }
 
     let randStr = ""
     let attempts = 0
@@ -1650,14 +1904,82 @@ export default function App() {
     setKeyInput(randStr)
     if (isHash) {
       insertHash(randStr)
+    } else if (isDynamic) {
+      handleDynamicAction("insert", randStr)
     } else {
       insertSequential(randStr)
     }
   }
 
+  const isDynamic = activeOption.startsWith("Búsquedas Dinámicas")
 
+  // Modificadores de Configuración Dinámica
+  const handleDynamicConfigChange = (field: keyof DynamicConfig, value: any) => {
+    const newConfig = { ...dynamicConfig, [field]: value }
+    setDynamicConfig(newConfig)
+    
+    if (dynamicState && dynamicState.keys.length === 0) {
+      setDynamicState({
+        ...dynamicState,
+        config: newConfig,
+        currentBuckets: newConfig.initialBuckets
+      })
+    }
+  }
 
-  const hasData = rows ? rows.some((r) => r.key !== "") : false
+  const handleDynamicAction = async (action: "insert" | "delete", autoKey?: string) => {
+    const keyToProcess = autoKey || keyInput.trim()
+    if (!keyToProcess) {
+      setMessage({ text: "Escribe una clave válida.", tone: "warn" })
+      return
+    }
+    
+    // Validar numérico
+    if (!/^-?\d+$/.test(keyToProcess)) {
+      setMessage({ text: "Solo se permiten claves numéricas para Búsquedas Dinámicas.", tone: "warn" })
+      return
+    }
+
+    if (busy) return
+    setBusy(true)
+
+    let prevState = dynamicState
+    if (!prevState) {
+       prevState = {
+         config: dynamicConfig,
+         currentBuckets: dynamicConfig.initialBuckets,
+         keys: [],
+         history: []
+       }
+    }
+
+    let newState: DynamicState | null = null
+    if (action === "insert") {
+      newState = insertDynamicKey(prevState, keyToProcess)
+    } else {
+      newState = deleteDynamicKey(prevState, keyToProcess)
+    }
+
+    if (newState && newState.currentBuckets !== prevState.currentBuckets) {
+      setAnimatingDynamic({
+        isAnimating: true,
+        oldState: prevState,
+        newState: newState
+      })
+      
+      await sleep(2500) // tiempo de visualización de la animación
+      
+      setAnimatingDynamic(null)
+    }
+
+    setDynamicState(newState)
+    setMessage({ text: `Clave ${keyToProcess} procesada${action === 'delete' ? ' (borrado)' : ''}.`, tone: "ok" })
+    
+    if (!autoKey) {
+      setKeyInput("")
+    }
+    setBusy(false)
+  }
 
   return (
     <div className="grid h-screen w-full grid-rows-[auto_1fr] bg-[#faf6f2] text-[#2b1610]">
@@ -1681,7 +2003,7 @@ export default function App() {
         />
 
         <main className="min-w-0 overflow-auto bg-[#faf6f2] p-8">
-          {!(isTableView || isTree) ? (
+          {!(isTableView || isTree || isDynamic) ? (
             <div className="mx-auto flex h-full max-w-4xl flex-col items-center justify-center rounded-2xl border border-dashed border-[#52241A]/15 text-center">
               <p className="text-[13px] font-semibold uppercase tracking-[0.3em] text-[#52241A]/40">
                 {current.label}
@@ -1690,9 +2012,7 @@ export default function App() {
                 {activeOption}
               </h2>
               <p className="mt-3 max-w-md text-sm text-[#52241A]/55">
-                {activeOption === "Búsquedas Dinámicas" 
-                  ? "Esta sección se encuentra en desarrollo y no está funcional por el momento." 
-                  : "El contenido de esta sección se mostrará aquí."}
+                El contenido de esta sección se mostrará aquí.
               </p>
             </div>
           ) : (
@@ -1712,7 +2032,7 @@ export default function App() {
                   onSave={handleSave}
                   onOpen={handleOpen}
                 />
-              ) : (
+              ) : !isDynamic && (
                 <TopControls
                   isHash={isHash}
                   hasData={!!rows && rows.length > 0}
@@ -1739,17 +2059,135 @@ export default function App() {
                 />
               )}
 
+              {isDynamic && (
+                <div className="flex items-end gap-1.5 flex-wrap">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#52241A]/60">
+                      Tamaño de la clave
+                    </span>
+                    <select
+                      value={keySize}
+                      onChange={(e) => setKeySize(Number(e.target.value))}
+                      disabled={!!dynamicState || busy}
+                      className="h-10 w-16 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[13px] text-[#2b1610] shadow-sm outline-none transition focus:border-[#6B2E24] focus:ring-2 focus:ring-[#E6B793] disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#52241A]/60">
+                      Número de cubetas
+                    </span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={dynamicConfig.initialBuckets}
+                      onChange={(e) => handleDynamicConfigChange("initialBuckets", parseInt(e.target.value) || 2)}
+                      disabled={!!dynamicState}
+                      className="h-10 w-24 rounded-lg border border-[#52241A]/20 bg-white px-3 text-[13px] text-[#2b1610] shadow-sm outline-none transition placeholder:text-[#52241A]/30 focus:border-[#6B2E24] focus:ring-2 focus:ring-[#E6B793] disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                  </label>
+
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#52241A]/60">
+                      Nº de registros por cubeta
+                    </span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={dynamicConfig.recordsPerBucket}
+                      onChange={(e) => handleDynamicConfigChange("recordsPerBucket", parseInt(e.target.value) || 3)}
+                      disabled={!!dynamicState}
+                      className="h-10 w-24 rounded-lg border border-[#52241A]/20 bg-white px-3 text-[13px] text-[#2b1610] shadow-sm outline-none transition placeholder:text-[#52241A]/30 focus:border-[#6B2E24] focus:ring-2 focus:ring-[#E6B793] disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                  </label>
+
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#52241A]/60">
+                      Tipo de Expansión
+                    </span>
+                    <select
+                      value={dynamicConfig.isPartial ? "Parciales" : "Totales"}
+                      onChange={(e) => handleDynamicConfigChange("isPartial", e.target.value === "Parciales")}
+                      disabled={!!dynamicState}
+                      className="h-10 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[13px] font-medium text-[#2b1610] shadow-sm outline-none transition focus:border-[#6B2E24] focus:ring-2 focus:ring-[#E6B793] disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="Totales">Totales</option>
+                      <option value="Parciales">Parciales</option>
+                    </select>
+                  </label>
+
+                  {!dynamicState ? (
+                    <button onClick={() => {
+                      const capacity = dynamicConfig.initialBuckets * dynamicConfig.recordsPerBucket;
+                      const optimalExp = Math.max(70, Math.floor(((capacity - 1) / capacity) * 100));
+                      const optimalRed = Math.min(150, Math.floor(((dynamicConfig.initialBuckets + 1) / dynamicConfig.initialBuckets) * 100));
+                      const newConfig = { ...dynamicConfig, expThreshold: optimalExp, redThreshold: optimalRed };
+                      setDynamicConfig(newConfig);
+                      setDynamicState({
+                        config: newConfig,
+                        currentBuckets: newConfig.initialBuckets,
+                        keys: [],
+                        history: []
+                      })
+                    }} className="h-10 shrink-0 rounded-lg bg-[#52241A] px-2 text-[12px] xl:px-3 xl:text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#6B2E24] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 hover:disabled:bg-[#52241A] ml-2">
+                      Generar Tabla Dinámica
+                    </button>
+                  ) : (
+                    <button onClick={() => {
+                      setDynamicState(null)
+                    }} className="h-10 shrink-0 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-3 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5 disabled:cursor-not-allowed disabled:opacity-50 ml-2">
+                      Borrar Tabla
+                    </button>
+                  )}
+
+                  <div className="ml-auto flex items-end gap-1.5">
+                    <label className="flex h-10 cursor-pointer items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-2.5 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5">
+                      <input type="file" accept=".json" className="hidden" onChange={handleOpen} />
+                      <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
+                      </svg>
+                      Abrir
+                    </label>
+                    <button onClick={handleSave} className="flex h-10 items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-2.5 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5">
+                      <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
+                        <path d="M17 21v-8H7v8M7 3v5h8" />
+                      </svg>
+                      Guardar
+                    </button>
+                    <button onClick={() => window.print()} className="flex h-10 items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-2.5 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5">
+                      <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6v-8Z" />
+                      </svg>
+                      Imprimir
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="min-h-0 flex-1 flex gap-4">
                 {isTree ? (
                   <TreeView treeData={treeData} />
+                ) : isDynamic ? (
+                  <DynamicTableView state={dynamicState} animatingState={animatingDynamic} />
                 ) : (
                   <TableView rows={rows} active={active} isHash={isHash} collision={collision} splitRange={splitRange} isExternal={isExternal} />
                 )}
 
-                <HashExplanation
-                  isHash={isHash || isTree}
-                  hashExplanation={hashExplanation}
-                />
+                {isDynamic ? (
+                  <DynamicLogicPanel isDynamic={isDynamic} dynamicState={animatingDynamic ? animatingDynamic.newState : dynamicState} />
+                ) : (
+                  <HashExplanation
+                    isHash={isHash || isTree}
+                    hashExplanation={hashExplanation}
+                  />
+                )}
               </div>
 
               {isTree ? (
@@ -1763,7 +2201,7 @@ export default function App() {
                   deleteKey={deleteKeyFromTree}
                   searchKey={handleTreeSearch}
                 />
-              ) : (
+              ) : !isDynamic && (
                 <BottomControls
                   isHash={isHash}
                   busy={busy}
@@ -1783,6 +2221,43 @@ export default function App() {
                   setCollisionOpen={setCollisionOpen}
                   triggerRehash={triggerRehash}
                 />
+              )}
+
+              {isDynamic && dynamicState && (
+                <div className="flex items-center gap-1.5">
+                  <span className="shrink-0 text-sm font-semibold text-[#52241A]">
+                    Clave:
+                  </span>
+                  <input
+                    value={keyInput}
+                    onChange={(e) => setKeyInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleDynamicAction("insert")}
+                    disabled={busy}
+                    placeholder="Espacio de texto"
+                    className="h-10 min-w-0 flex-1 rounded-lg border border-[#52241A]/20 bg-white px-3 text-[13px] text-[#2b1610] shadow-sm outline-none transition placeholder:text-[#52241A]/30 focus:border-[#6B2E24] focus:ring-2 focus:ring-[#E6B793] disabled:opacity-50"
+                  />
+                  <button
+                    onClick={() => handleDynamicAction("insert")}
+                    disabled={busy || !keyInput}
+                    className="h-10 shrink-0 rounded-lg bg-[#6B2E24] px-2 text-[12px] xl:px-3 xl:text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#52241A] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Insertar clave
+                  </button>
+                  <button
+                    onClick={insertAuto}
+                    disabled={busy || !dynamicState}
+                    className="h-10 shrink-0 rounded-lg bg-[#E6B793] text-[#52241A] px-2 text-[12px] xl:px-3 xl:text-[13px] font-bold shadow-sm transition hover:bg-[#D5A37F] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Insertar Auto
+                  </button>
+                  <button
+                    onClick={() => handleDynamicAction("delete")}
+                    disabled={busy || !keyInput}
+                    className="h-10 shrink-0 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-3 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Borrar clave
+                  </button>
+                </div>
               )}
 
               {message && (
