@@ -1,9 +1,9 @@
 export interface DynamicConfig {
   initialBuckets: number
   recordsPerBucket: number
-  expThreshold: number // percentage, e.g. 85
-  redThreshold: number // percentage, e.g. 125
-  isPartial: boolean // true = Parciales, false = Totales
+  expThreshold: number // percentage, e.g. 80 (must be < 100)
+  redThreshold: number // percentage, e.g. 70 (must be < expThreshold)
+  isPartial: boolean // true = Parciales (+1 cubeta), false = Totales (*2 cubetas)
 }
 
 export interface DynamicState {
@@ -21,45 +21,78 @@ export interface OperationResult {
   didReduce: boolean
   oldBuckets: number
   newBuckets: number
+  keysCount: number
+  currentCapacity: number
+  reducedCapacity: number
+  recordsPerBucket: number
+  expThreshold: number
+  redThreshold: number
+  explanation: string
 }
 
-// Retorna la tabla generada a partir de las llaves
+// Retorna la matriz de cubetas y registros generada a partir de las llaves
 export const generateDynamicTable = (keys: string[], buckets: number): string[][] => {
-  const table: string[][] = Array.from({ length: buckets }, () => [])
-  
+  const safeBuckets = Math.max(1, buckets)
+  const table: string[][] = Array.from({ length: safeBuckets }, () => [])
+
   for (const key of keys) {
     const k = parseInt(key, 10)
-    const b = (k % buckets)
+    if (isNaN(k)) continue
+    const b = ((k % safeBuckets) + safeBuckets) % safeBuckets
     table[b].push(key)
   }
-  
+
   return table
 }
 
 export const insertDynamicKey = (state: DynamicState, key: string): DynamicState => {
   if (state.keys.includes(key)) {
-    return state // ya existe
+    return state // Clave ya existente
   }
 
   const newKeys = [...state.keys, key]
   let currentBuckets = state.currentBuckets
+  const oldBuckets = currentBuckets
+  const R = Math.max(1, state.config.recordsPerBucket)
   let didExpand = false
-  let oldBuckets = currentBuckets
 
-  // Calcula DO
-  // DO expansión = (N claves / (N cubetas * Registros)) * 100
-  let doExp = (newKeys.length / (currentBuckets * state.config.recordsPerBucket)) * 100
-  let doRed = (newKeys.length / currentBuckets) * 100
+  // 1. DO para Expansión con respecto a la capacidad de la tabla actual
+  const currentCapacity = currentBuckets * R
+  const candidateDoExp = (newKeys.length / currentCapacity) * 100
 
-  if (doExp >= state.config.expThreshold) {
-    // Expandir
+  // Regla estricta: Jamás debe llegar al 100% antes de expandir.
+  // Expande si candidateDoExp >= expThreshold O si el número de claves alcanza o supera la capacidad.
+  if (candidateDoExp >= state.config.expThreshold || newKeys.length >= currentCapacity) {
     didExpand = true
     if (state.config.isPartial) {
       currentBuckets += 1
     } else {
       currentBuckets *= 2
     }
+
+    // Asegurar que tras la expansión tampoco quede al 100%
+    while (newKeys.length >= currentBuckets * R) {
+      if (state.config.isPartial) {
+        currentBuckets += 1
+      } else {
+        currentBuckets *= 2
+      }
+    }
   }
+
+  const finalCapacity = currentBuckets * R
+  const finalDoExp = (newKeys.length / finalCapacity) * 100
+
+  // 2. DO para Reducción proyectada de la tabla resultante
+  const redBuckets = state.config.isPartial
+    ? Math.max(state.config.initialBuckets, currentBuckets - 1)
+    : Math.max(state.config.initialBuckets, Math.floor(currentBuckets / 2))
+  const redCapacity = redBuckets * R
+  const prospectiveDoRed = redCapacity > 0 ? (newKeys.length / redCapacity) * 100 : 0
+
+  const explanation = didExpand
+    ? `Expansión realizada: DO (${candidateDoExp.toFixed(1)}%) superó el umbral (${state.config.expThreshold}%) o se evitó alcanzar el 100% de capacidad. Cubetas: ${oldBuckets} → ${currentBuckets}. Nueva DO actual: ${finalDoExp.toFixed(1)}%.`
+    : `Clave insertada sin expansión. DO actual: ${finalDoExp.toFixed(1)}% (Umbral: ${state.config.expThreshold}%).`
 
   return {
     ...state,
@@ -69,12 +102,19 @@ export const insertDynamicKey = (state: DynamicState, key: string): DynamicState
       ...state.history,
       {
         action: `Insertó ${key}`,
-        doExp,
-        doRed,
+        doExp: finalDoExp,
+        doRed: prospectiveDoRed,
         didExpand,
         didReduce: false,
         oldBuckets,
-        newBuckets: currentBuckets
+        newBuckets: currentBuckets,
+        keysCount: newKeys.length,
+        currentCapacity: finalCapacity,
+        reducedCapacity: redCapacity,
+        recordsPerBucket: R,
+        expThreshold: state.config.expThreshold,
+        redThreshold: state.config.redThreshold,
+        explanation
       }
     ]
   }
@@ -82,28 +122,57 @@ export const insertDynamicKey = (state: DynamicState, key: string): DynamicState
 
 export const deleteDynamicKey = (state: DynamicState, key: string): DynamicState => {
   if (!state.keys.includes(key)) {
-    return state // no existe
+    return state // Clave no existe
   }
 
-  const newKeys = state.keys.filter(k => k !== key)
+  const newKeys = state.keys.filter((k) => k !== key)
   let currentBuckets = state.currentBuckets
+  const oldBuckets = currentBuckets
+  const R = Math.max(1, state.config.recordsPerBucket)
   let didReduce = false
-  let oldBuckets = currentBuckets
 
-  // Calcula DO para reducción
-  // DO red = (N claves / N cubetas) * 100
-  let doExp = (newKeys.length / (currentBuckets * state.config.recordsPerBucket)) * 100
-  let doRed = (newKeys.length / currentBuckets) * 100
+  // 1. Cubetas y capacidad reducida proyectada
+  const targetReducedBuckets = state.config.isPartial
+    ? currentBuckets - 1
+    : Math.max(state.config.initialBuckets, Math.floor(currentBuckets / 2))
+  const targetReducedCapacity = targetReducedBuckets * R
 
-  if (doRed <= state.config.redThreshold && currentBuckets > state.config.initialBuckets) {
-    // Reducir
+  // 2. DO para Reducción:
+  // Se evalúa sobre la capacidad proyectada en caso de reducir
+  const doRed = targetReducedCapacity > 0 ? (newKeys.length / targetReducedCapacity) * 100 : 0
+
+  // Condiciones de reducción con prevención anti-bucle:
+  // a) Tabla expandida previamente (currentBuckets > initialBuckets).
+  // b) targetReducedBuckets < currentBuckets.
+  // c) newKeys.length < targetReducedCapacity (no debe estar al 100% en la reducida tampoco).
+  // d) doRed <= redThreshold (con redThreshold < expThreshold).
+  //    Al garantizar doRed <= U_red < U_exp, la nueva tabla reducida tendrá DO < U_exp,
+  //    evitando que vuelva a expandirse inmediatamente y eliminando el bucle infinito.
+  const canReduce =
+    currentBuckets > state.config.initialBuckets &&
+    targetReducedBuckets < currentBuckets &&
+    newKeys.length < targetReducedCapacity &&
+    doRed <= state.config.redThreshold
+
+  if (canReduce) {
     didReduce = true
-    if (state.config.isPartial) {
-      currentBuckets -= 1
-    } else {
-      currentBuckets = Math.max(state.config.initialBuckets, Math.ceil(currentBuckets / 2))
-    }
+    currentBuckets = targetReducedBuckets
   }
+
+  // Capacidad y DO de la tabla resultante (si redujo, usa targetReduced; si no, la actual)
+  const finalCapacity = currentBuckets * R
+  const finalDoExp = finalCapacity > 0 ? (newKeys.length / finalCapacity) * 100 : 0
+
+  // Siguiente DO de reducción proyectada a partir del nuevo estado
+  const nextRedBuckets = state.config.isPartial
+    ? Math.max(state.config.initialBuckets, currentBuckets - 1)
+    : Math.max(state.config.initialBuckets, Math.floor(currentBuckets / 2))
+  const nextRedCapacity = nextRedBuckets * R
+  const nextDoRed = nextRedCapacity > 0 ? (newKeys.length / nextRedCapacity) * 100 : 0
+
+  const explanation = didReduce
+    ? `Reducción realizada: DO proyectada (${doRed.toFixed(1)}%) cumplió el umbral ≤ ${state.config.redThreshold}%. Cubetas: ${oldBuckets} → ${currentBuckets}. Nueva DO actual actualizada: ${finalDoExp.toFixed(1)}%.`
+    : `Clave eliminada sin reducción. DO actual: ${finalDoExp.toFixed(1)}% (DO proyectada si se redujera: ${doRed.toFixed(1)}%, Umbral: ${state.config.redThreshold}%).`
 
   return {
     ...state,
@@ -113,12 +182,19 @@ export const deleteDynamicKey = (state: DynamicState, key: string): DynamicState
       ...state.history,
       {
         action: `Eliminó ${key}`,
-        doExp,
-        doRed,
+        doExp: finalDoExp, // DO REAL y actualizada de la tabla resultante
+        doRed: didReduce ? nextDoRed : doRed,
         didExpand: false,
         didReduce,
         oldBuckets,
-        newBuckets: currentBuckets
+        newBuckets: currentBuckets,
+        keysCount: newKeys.length,
+        currentCapacity: finalCapacity,
+        reducedCapacity: nextRedCapacity,
+        recordsPerBucket: R,
+        expThreshold: state.config.expThreshold,
+        redThreshold: state.config.redThreshold,
+        explanation
       }
     ]
   }

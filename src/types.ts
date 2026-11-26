@@ -52,3 +52,8 @@ export interface HuffmanLogicData {
   averageLength: number;
   encodedString: string;
 }
+
+// ── Tipos para el Módulo de Índices (Búsquedas Externas) ─────────
+export type { IndexCalcParams, IndexCalcResults, MultilevelLevel } from "./utils/indexUtils"
+
+

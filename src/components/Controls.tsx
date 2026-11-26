@@ -1,4 +1,5 @@
 import { Dispatch, SetStateAction, useState } from "react"
+import { motion, AnimatePresence } from "framer-motion"
 import { HASH_ALGORITHMS, COLLISION_SOLUTIONS } from "../constants"
 import { PendingChange } from "../types"
 
@@ -146,7 +147,10 @@ export function TopControls({
           </svg>
           Guardar
         </button>
-        <button className="flex h-10 items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-2.5 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5">
+        <button
+          onClick={() => window.print()}
+          className="flex h-10 items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-2.5 text-[12px] xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5 active:scale-[0.98]"
+        >
           <svg
             viewBox="0 0 24 24"
             className="size-4"
@@ -295,78 +299,96 @@ export function BottomControls({
             </svg>
           </button>
 
-          {collisionOpen && (
-            <>
-              {/* capa para cerrar al hacer clic fuera */}
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setCollisionOpen(false)}
-              />
-              <div className="absolute bottom-full right-0 z-20 mb-2 w-56 overflow-hidden rounded-xl border border-[#52241A]/15 bg-white py-1 shadow-xl">
-                {COLLISION_SOLUTIONS.map((sol) => {
-                  const selected = sol === collision
-                  const isDouble = sol === "Doble Función Hash"
-                  return (
-                    <div key={sol}>
-                      <button
-                        onClick={() => {
-                          if (!isDouble) {
-                            setCollisionOpen(false)
-                            requestChange({ type: "collision", coll: sol })
-                          } else {
-                            setDoubleHashOpen((o) => !o)
-                          }
-                        }}
-                        className={`flex w-full items-center justify-between px-4 py-2 text-left text-sm transition-colors ${
-                          selected
-                            ? "bg-[#E6B793]/25 font-semibold text-[#52241A]"
-                            : "text-[#2b1610] hover:bg-[#52241A]/5"
-                        }`}
-                      >
-                        {sol}
-                        {isDouble && (
-                          <svg
-                            viewBox="0 0 24 24"
-                            className={`size-4 transition-transform text-[#52241A]/50 ${doubleHashOpen ? "rotate-90" : ""}`}
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <path d="m9 6 6 6-6 6" />
-                          </svg>
-                        )}
-                      </button>
-
-                      {/* submenú de algoritmos hash para Doble Función Hash */}
-                      {isDouble && (selected || doubleHashOpen) && (
-                        <div className="border-t border-[#52241A]/10 bg-[#faf6f2]/60 py-1">
-                          {HASH_ALGORITHMS.map((algo) => (
-                            <button
-                              key={algo}
-                              onClick={() => {
-                                setCollisionOpen(false)
-                                setDoubleHashOpen(false)
-                                requestChange({ type: "collision", coll: "Doble Función Hash", double: algo })
-                              }}
-                              className={`block w-full px-8 py-1.5 text-left text-[13px] transition-colors ${
-                                algo === doubleHash
-                                  ? "font-semibold text-[#52241A]"
-                                  : "text-[#52241A]/70 hover:text-[#52241A]"
-                              }`}
+          <AnimatePresence>
+            {collisionOpen && (
+              <>
+                {/* capa para cerrar al hacer clic fuera */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-10"
+                  onClick={() => setCollisionOpen(false)}
+                />
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  className="absolute bottom-full right-0 z-20 mb-2 w-60 overflow-hidden rounded-xl border border-[#52241A]/15 bg-white py-1 shadow-2xl"
+                >
+                  {COLLISION_SOLUTIONS.map((sol) => {
+                    const selected = sol === collision
+                    const isDouble = sol === "Doble Función Hash"
+                    return (
+                      <div key={sol}>
+                        <button
+                          onClick={() => {
+                            if (!isDouble) {
+                              setCollisionOpen(false)
+                              requestChange({ type: "collision", coll: sol })
+                            } else {
+                              setDoubleHashOpen((o) => !o)
+                            }
+                          }}
+                          className={`flex w-full items-center justify-between px-4 py-2.5 text-left text-[13px] font-medium transition-colors ${
+                            selected
+                              ? "bg-[#E6B793]/30 font-bold text-[#52241A]"
+                              : "text-[#2b1610] hover:bg-[#52241A]/5"
+                          }`}
+                        >
+                          {sol}
+                          {isDouble && (
+                            <svg
+                              viewBox="0 0 24 24"
+                              className={`size-4 transition-transform text-[#52241A]/50 ${doubleHashOpen ? "rotate-90" : ""}`}
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth={2}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
                             >
-                              {algo}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </>
-          )}
+                              <path d="m9 6 6 6-6 6" />
+                            </svg>
+                          )}
+                        </button>
+
+                        {/* submenú de algoritmos hash para Doble Función Hash */}
+                        <AnimatePresence>
+                          {isDouble && (selected || doubleHashOpen) && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="border-t border-[#52241A]/10 bg-[#faf6f2]/80 py-1"
+                            >
+                              {HASH_ALGORITHMS.map((algo) => (
+                                <button
+                                  key={algo}
+                                  onClick={() => {
+                                    setCollisionOpen(false)
+                                    setDoubleHashOpen(false)
+                                    requestChange({ type: "collision", coll: "Doble Función Hash", double: algo })
+                                  }}
+                                  className={`block w-full px-8 py-1.5 text-left text-[12px] transition-colors ${
+                                    algo === doubleHash
+                                      ? "font-bold text-[#6B2E24] bg-[#E6B793]/20"
+                                      : "text-[#52241A]/70 hover:text-[#52241A] hover:bg-white/50"
+                                  }`}
+                                >
+                                  {algo}
+                                </button>
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )
+                  })}
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
         </div>
       )}
     </div>

@@ -1,4 +1,5 @@
 import { useState, ReactNode } from "react"
+import { motion, AnimatePresence } from "framer-motion"
 import { Section, SectionId, Row, PendingChange, TreeNode } from "./types"
 import { SECTIONS } from "./constants"
 import {
@@ -19,6 +20,7 @@ import ConfirmModal from "./components/ConfirmModal"
 import HuffmanExplanation from "./components/HuffmanExplanation"
 import DynamicTableView from "./components/DynamicTableView"
 import DynamicLogicPanel from "./components/DynamicLogicPanel"
+import ExternalIndexView from "./components/ExternalIndexView"
 import { insertDigitalTree, searchDigitalTree, deleteDigitalTree, insertRadixTree, searchRadixTree, deleteRadixTree, insertMultiRadixTree, searchMultiRadixTree, deleteMultiRadixTree, buildHuffmanTree } from "./utils/treeUtils"
 import { DynamicState, DynamicConfig, insertDynamicKey, deleteDynamicKey } from "./utils/dynamicHashUtils"
 
@@ -36,8 +38,8 @@ export default function App() {
   const [dynamicConfig, setDynamicConfig] = useState<DynamicConfig>({
     initialBuckets: 2,
     recordsPerBucket: 3,
-    expThreshold: 85,
-    redThreshold: 105,
+    expThreshold: 80,
+    redThreshold: 70,
     isPartial: false
   })
   const [dynamicState, setDynamicState] = useState<DynamicState | null>(null)
@@ -65,7 +67,7 @@ export default function App() {
     state: "compare" | "match" | "insert" | "collide" | "resolve"
     subIndex?: number
   } | null>(null)
-  
+
   const [splitRange, setSplitRange] = useState<{ left: number; mid: number; right: number; activeHalf: "left" | "right" } | null>(null)
   const [message, setMessage] = useState<{
     text: string
@@ -78,30 +80,36 @@ export default function App() {
   const [treeAlgo, setTreeAlgo] = useState<string>("Búsqueda Digital")
 
   const current = SECTIONS.find((s) => s.id === activeSection)!
+  const isIndex = activeSection === "externas" && activeOption === "Índices"
   const isTableView =
     (activeSection === "internas" || activeSection === "externas") &&
     activeOption !== "Árboles de Búsqueda" &&
-    activeOption !== "Búsquedas Dinámicas"
+    activeOption !== "Búsquedas Dinámicas" &&
+    activeOption !== "Índices"
   const isHash = activeOption === "Transformaciones de Claves"
   const isTree = activeOption === "Árboles de Búsqueda"
   const isExternal = activeSection === "externas"
 
-  const hasInsertedData = !!((rows && rows.some(r => r.key !== "")) || treeData || (dynamicState && dynamicState.keys.length > 0))
+  const hasInsertedData = !!(
+    (rows && rows.some((r) => r.key !== "")) ||
+    treeData ||
+    (dynamicState && dynamicState.keys.length > 0)
+  )
 
   const triggerRehash = (algo: string, coll: string, double: string) => {
     if (!algo || !coll || (coll === "Doble Función Hash" && !double)) return
-    
+
     const summarySteps = [
       <div key="rehash_summary" className="mb-4">
         <p className="mb-1 font-semibold text-[#52241A]">Resumen de Rehasheo</p>
         <p className="text-sm text-[#52241A]/80 ml-2">
           La tabla ha sido reubicada instantáneamente usando <strong>{algo}</strong>.
-          <br/>Resolución de colisiones: <strong>{coll}</strong>
+          <br />Resolución de colisiones: <strong>{coll}</strong>
           {coll === "Doble Función Hash" && double ? ` (${double})` : ""}.
         </p>
       </div>
     ]
-    
+
     setHashExplanation({
       title: `Algoritmo: ${algo}`,
       steps: summarySteps,
@@ -132,12 +140,12 @@ export default function App() {
     if (change.type === "section") {
       const isCurrentTree = activeOption === "Árboles de Búsqueda"
       const isNewTree = change.option === "Árboles de Búsqueda"
-      
+
       if (isCurrentTree && !isNewTree && !!treeData) {
         showModal = true
       } else if (!isCurrentTree && isNewTree && hasInsertedData) {
         showModal = true
-      } else if (!isCurrentTree && !isNewTree && hasInsertedData) {
+      } else if (!isCurrentTree && !isNewTree && hasInsertedData && change.option !== "Índices" && activeOption !== "Índices") {
         showModal = true
       }
     } else {
@@ -202,7 +210,7 @@ export default function App() {
       if (isDynamic) {
         setDynamicState(null)
       }
-      
+
       setActiveOption(change.option)
       setPendingChange(null)
       setMessage(null)
@@ -232,7 +240,7 @@ export default function App() {
       setRows(null)
       return
     }
-    
+
     let finalSize = size
     if (isExternal) {
       const numBlocks = Math.ceil(Math.sqrt(size))
@@ -246,7 +254,7 @@ export default function App() {
     setHashExplanation(null)
   }
 
-  const handleSave = () => {
+  const handleSave = (customData?: any) => {
     let dataToSave: any = {}
     if (isTree) {
       if (!treeData) {
@@ -254,6 +262,12 @@ export default function App() {
         return
       }
       dataToSave = { type: "tree", data: treeData, huffmanText: huffmanText }
+    } else if (isIndex) {
+      if (!customData) {
+        setMessage({ text: "No hay estructura de índices calculada para guardar.", tone: "warn" })
+        return
+      }
+      dataToSave = { type: "index_calc", data: customData }
     } else {
       if (!rows || rows.length === 0) {
         setMessage({ text: "No hay un arreglo para guardar.", tone: "warn" })
@@ -261,10 +275,10 @@ export default function App() {
       }
       dataToSave = { type: "array", data: rows, size: arraySizeInput }
     }
-    
-    let fileName = window.prompt("Ingrese el nombre del archivo para guardar:", `datos_${isTree ? "arbol" : "arreglo"}`)
+
+    let fileName = window.prompt("Ingrese el nombre del archivo para guardar:", `datos_${isTree ? "arbol" : isIndex ? "indices" : "arreglo"}`)
     if (!fileName) return // El usuario canceló o dejó en blanco
-    
+
     if (!fileName.endsWith('.json')) {
       fileName += '.json'
     }
@@ -290,18 +304,24 @@ export default function App() {
       try {
         const result = event.target?.result as string
         const parsed = JSON.parse(result)
-        
+
         if (isTree) {
           if (parsed.type !== "tree") {
-            setMessage({ text: "No se puede abrir un arreglo de tabla en la sección de árboles.", tone: "warn" })
+            setMessage({ text: "No se puede abrir un archivo de este tipo en la sección de árboles.", tone: "warn" })
             return
           }
           setTreeData(parsed.data)
           if (parsed.huffmanText) setHuffmanText(parsed.huffmanText)
           setMessage({ text: "Árbol cargado exitosamente.", tone: "ok" })
+        } else if (isIndex) {
+          if (parsed.type !== "index_calc") {
+            setMessage({ text: "El archivo no contiene datos de la sección de Índices.", tone: "warn" })
+            return
+          }
+          setMessage({ text: "Estructura de índices cargada exitosamente.", tone: "ok" })
         } else {
           if (parsed.type !== "array") {
-            setMessage({ text: "No se puede abrir un árbol en la sección de arreglos.", tone: "warn" })
+            setMessage({ text: "No se puede abrir este archivo en la sección de arreglos.", tone: "warn" })
             return
           }
           setRows(parsed.data)
@@ -373,7 +393,7 @@ export default function App() {
     }
 
     setActive({ pos: rows[targetIndex].pos, state: "insert" })
-    
+
     setRows((prev) => {
       if (!prev) return prev
       const newRows = [...prev]
@@ -408,7 +428,7 @@ export default function App() {
 
     setBusy(true)
     setMessage({ text: `Eliminando "${key}" de ${treeAlgo}…`, tone: "info" })
-    
+
     if (treeAlgo === "Árbol de Huffman") {
       setMessage({ text: `No se puede borrar claves individuales de un Árbol de Huffman.`, tone: "warn" })
       setBusy(false)
@@ -445,7 +465,7 @@ export default function App() {
         await sleep(400)
       }
     }
-    
+
     setTreeData(result.newRoot)
     if (result.found !== false) {
       setMessage({ text: `Intentando borrar "${key}" completado.`, tone: "ok" })
@@ -453,7 +473,7 @@ export default function App() {
     } else {
       setMessage({ text: `La clave "${key}" no se encontró en el árbol.`, tone: "warn" })
     }
-    
+
     setBusy(false)
   }
 
@@ -471,7 +491,7 @@ export default function App() {
 
     setBusy(true)
     setMessage({ text: `Buscando "${key}" en ${treeAlgo}…`, tone: "info" })
-    
+
     if (treeAlgo === "Árbol de Huffman") {
       setMessage({ text: `No se puede buscar claves individuales en un Árbol de Huffman.`, tone: "warn" })
       setBusy(false)
@@ -508,7 +528,7 @@ export default function App() {
         await sleep(400)
       }
     }
-    
+
     const lastFrame = result.frames && result.frames.length > 0 ? result.frames[result.frames.length - 1] : null;
     const isFound = result.found !== undefined ? result.found : (lastFrame && lastFrame.description.includes("encontrada"));
 
@@ -517,10 +537,10 @@ export default function App() {
     } else {
       setMessage({ text: `La clave "${key}" no se encuentra en el árbol.`, tone: "warn" })
     }
-    
+
     await sleep(2000)
     setTreeData(treeData)
-    
+
     setBusy(false)
   }
 
@@ -553,11 +573,11 @@ export default function App() {
     if (isExternal) {
       let currentRows = rows.map((r) => ({ ...r, inactive: false }))
       const targetVal = parseInt(key, 10)
-      
+
       for (let b = 0; b < numBlocks; b++) {
         let startIdx = b * blockSize;
         let endIdx = Math.min((b + 1) * blockSize, n) - 1;
-        
+
         let lastIdx = endIdx;
         while (lastIdx >= startIdx && currentRows[lastIdx].key === "") {
           lastIdx--;
@@ -575,33 +595,33 @@ export default function App() {
         await sleep(1000);
 
         if (targetVal > lastVal) {
-           setMessage({ text: `Clave mayor a ${lastVal} (último del bloque). Saltando al siguiente bloque...`, tone: "info" });
-           for (let i = startIdx; i <= endIdx; i++) currentRows[i].inactive = true;
-           setRows([...currentRows]);
-           await sleep(500);
-           continue;
+          setMessage({ text: `Clave mayor a ${lastVal} (último del bloque). Saltando al siguiente bloque...`, tone: "info" });
+          for (let i = startIdx; i <= endIdx; i++) currentRows[i].inactive = true;
+          setRows([...currentRows]);
+          await sleep(500);
+          continue;
         } else {
-           setMessage({ text: `Clave <= ${lastVal}. Iniciando búsqueda secuencial en Bloque ${b + 1}...`, tone: "info" });
-           await sleep(1000);
-           
-           for (let i = startIdx; i <= lastIdx; i++) {
-             setActive({ pos: currentRows[i].pos, state: "compare" })
-             await sleep(320)
+          setMessage({ text: `Clave <= ${lastVal}. Iniciando búsqueda secuencial en Bloque ${b + 1}...`, tone: "info" });
+          await sleep(1000);
 
-             if (currentRows[i].key === key) {
-               setActive({ pos: currentRows[i].pos, state: "match" })
-               setMessage({ text: `Clave "${key}" encontrada en Bloque ${b + 1} (posición ${currentRows[i].pos}).`, tone: "ok" })
-               setBusy(false)
-               return
-             }
-           }
-           
-           for (let i = startIdx; i <= endIdx; i++) currentRows[i].inactive = true;
-           setRows([...currentRows]);
-           break;
+          for (let i = startIdx; i <= lastIdx; i++) {
+            setActive({ pos: currentRows[i].pos, state: "compare" })
+            await sleep(320)
+
+            if (currentRows[i].key === key) {
+              setActive({ pos: currentRows[i].pos, state: "match" })
+              setMessage({ text: `Clave "${key}" encontrada en Bloque ${b + 1} (posición ${currentRows[i].pos}).`, tone: "ok" })
+              setBusy(false)
+              return
+            }
+          }
+
+          for (let i = startIdx; i <= endIdx; i++) currentRows[i].inactive = true;
+          setRows([...currentRows]);
+          break;
         }
       }
-      
+
       setMessage({ text: `La clave "${key}" no se encuentra en el arreglo.`, tone: "warn" })
       setActive(null)
       setBusy(false)
@@ -642,7 +662,7 @@ export default function App() {
       setMessage({ text: "Escribe una clave para buscar.", tone: "warn" })
       return
     }
-    
+
     if (!hashAlgo || !collision || (collision === "Doble Función Hash" && !doubleHash)) {
       setMessage({ text: "Falta seleccionar algoritmo o método de colisión.", tone: "warn" })
       return
@@ -840,12 +860,12 @@ export default function App() {
       }
 
       if (collision === "Lista Enlazada" || collision === "Arreglo Anidado") {
-         break
+        break
       }
 
       setActive({ pos, state: "collide" })
       setMessage({ text: `Posición ${pos} ocupada por otra clave. Resolviendo colisión...`, tone: "warn" })
-      
+
       await sleep(600)
 
       let oldPos = pos
@@ -943,7 +963,7 @@ export default function App() {
 
         let minVal = parseInt(currentRows[startIdx].key, 10);
         let maxVal = parseInt(currentRows[endIdx].key, 10);
-        
+
         setMessage({ text: `Evaluando Bloque ${blockMid + 1} (Rango: ${minVal} - ${maxVal})`, tone: "info" });
         setSplitRange({ left: currentRows[startIdx].pos, mid: currentRows[endIdx].pos, right: currentRows[endIdx].pos, activeHalf: "left" });
         await sleep(1000);
@@ -954,18 +974,18 @@ export default function App() {
           break;
         } else if (targetVal < minVal) {
           blockRight = blockMid - 1;
-          for(let b = blockMid; b <= numBlocks - 1; b++) {
+          for (let b = blockMid; b <= numBlocks - 1; b++) {
             let s = b * blockSize;
             let e = Math.min((b + 1) * blockSize, n) - 1;
-            for(let i=s; i<=e; i++) currentRows[i].inactive = true;
+            for (let i = s; i <= e; i++) currentRows[i].inactive = true;
           }
           setRows([...currentRows]);
         } else {
           blockLeft = blockMid + 1;
-          for(let b = 0; b <= blockMid; b++) {
+          for (let b = 0; b <= blockMid; b++) {
             let s = b * blockSize;
             let e = Math.min((b + 1) * blockSize, n) - 1;
-            for(let i=s; i<=e; i++) currentRows[i].inactive = true;
+            for (let i = s; i <= e; i++) currentRows[i].inactive = true;
           }
           setRows([...currentRows]);
         }
@@ -1050,7 +1070,7 @@ export default function App() {
       setMessage({ text: "Escribe la clave que deseas borrar.", tone: "warn" })
       return
     }
-    
+
     if (isHash) {
       if (!hashAlgo || !collision || (collision === "Doble Función Hash" && !doubleHash)) {
         setMessage({ text: "Falta seleccionar algoritmo o método de colisión.", tone: "warn" })
@@ -1177,11 +1197,11 @@ export default function App() {
 
             const parts = currentRows[i].key.split(/, | -> /)
             const foundIdx = parts.indexOf(key)
-            
+
             if (foundIdx !== -1) {
               setActive({ pos: currentRows[i].pos, state: "match", subIndex: foundIdx })
               await sleep(400)
-              
+
               setRows((prev) => {
                 if (!prev) return prev
                 let newRows = [...prev]
@@ -1202,7 +1222,7 @@ export default function App() {
               break
             }
           }
-          
+
           if (found) break
 
           if (!blockFull) {
@@ -1240,7 +1260,7 @@ export default function App() {
         if (foundIdx !== -1) {
           setActive({ pos, state: "match", subIndex: foundIdx })
           await sleep(400)
-          
+
           setRows((prev) => {
             if (!prev) return prev
             let newRows = [...prev]
@@ -1252,11 +1272,11 @@ export default function App() {
             } else {
               newRows[rowIdx] = { ...newRows[rowIdx], key: "" }
             }
-            
+
             newRows = rehashInstantly(newRows, hashAlgo, collision, doubleHash, isExternal)
             return newRows
           })
-          
+
           if (parts.length > 1) {
             setMessage({ text: `¡Clave "${key}" borrada de la posición ${pos} (columna ${foundIdx + 1})!`, tone: "ok" })
             currentSteps.push(
@@ -1285,12 +1305,12 @@ export default function App() {
         }
 
         if (collision === "Lista Enlazada" || collision === "Arreglo Anidado") {
-           break
+          break
         }
 
         setActive({ pos, state: "collide" })
         setMessage({ text: `Posición ${pos} ocupada por otra clave. Buscando en siguiente...`, tone: "warn" })
-        
+
         currentSteps.push(
           <div key={`col_detect_${attempts}`} className="mb-2">
             <p className="mb-1 font-semibold text-[#a23b2a]">Intento {attempts + 2}: Clave distinta en posición {pos}</p>
@@ -1322,7 +1342,7 @@ export default function App() {
       if (!found) {
         setMessage({ text: `La clave "${key}" no se encuentra en la tabla Hash.`, tone: "warn" })
       }
-      
+
       setActive(null)
       setBusy(false)
       return
@@ -1495,7 +1515,7 @@ export default function App() {
 
     setBusy(true)
     setMessage({ text: `Insertando "${key}" en ${treeAlgo}…`, tone: "info" })
-    
+
     // @ts-ignore
     let result: { newRoot: TreeNode | null; steps: string[]; frames?: any[]; logicData?: any } = { newRoot: null, steps: [] }
 
@@ -1539,16 +1559,16 @@ export default function App() {
       setTreeData(result.newRoot)
     } else {
       setTreeData(result.newRoot)
-      setHashExplanation({ 
-        title: treeAlgo, 
-        steps: result.steps.map((s,i) => (
+      setHashExplanation({
+        title: treeAlgo,
+        steps: result.steps.map((s, i) => (
           <div key={`tree_step_${i}`} className="mb-2 ml-2 border-l-2 border-[#E6B793] pl-3">
             <p className="text-sm text-[#52241A]/80">{s}</p>
           </div>
-        )) 
+        ))
       })
     }
-    
+
     setMessage({ text: `Operación completada en ${treeAlgo}.`, tone: "ok" })
     if (treeAlgo !== "Árbol de Huffman") setKeyInput("")
     setBusy(false)
@@ -1562,7 +1582,7 @@ export default function App() {
       setMessage({ text: error, tone: "warn" })
       return
     }
-    
+
     if (!hashAlgo || !collision || (collision === "Doble Función Hash" && !doubleHash)) {
       setMessage({ text: "Falta seleccionar algoritmo o método de colisión.", tone: "warn" })
       return
@@ -1915,9 +1935,21 @@ export default function App() {
 
   // Modificadores de Configuración Dinámica
   const handleDynamicConfigChange = (field: keyof DynamicConfig, value: any) => {
-    const newConfig = { ...dynamicConfig, [field]: value }
+    let newConfig = { ...dynamicConfig, [field]: value }
+
+    if (field === "expThreshold") {
+      const expVal = Math.min(95, Math.max(50, Number(value) || 80))
+      newConfig.expThreshold = expVal
+      if (newConfig.redThreshold >= expVal) {
+        newConfig.redThreshold = Math.max(20, expVal - 10)
+      }
+    } else if (field === "redThreshold") {
+      const redVal = Math.min(newConfig.expThreshold - 5, Math.max(20, Number(value) || 60))
+      newConfig.redThreshold = redVal
+    }
+
     setDynamicConfig(newConfig)
-    
+
     if (dynamicState && dynamicState.keys.length === 0) {
       setDynamicState({
         ...dynamicState,
@@ -1933,7 +1965,7 @@ export default function App() {
       setMessage({ text: "Escribe una clave válida.", tone: "warn" })
       return
     }
-    
+
     // Validar numérico
     if (!/^-?\d+$/.test(keyToProcess)) {
       setMessage({ text: "Solo se permiten claves numéricas para Búsquedas Dinámicas.", tone: "warn" })
@@ -1945,12 +1977,12 @@ export default function App() {
 
     let prevState = dynamicState
     if (!prevState) {
-       prevState = {
-         config: dynamicConfig,
-         currentBuckets: dynamicConfig.initialBuckets,
-         keys: [],
-         history: []
-       }
+      prevState = {
+        config: dynamicConfig,
+        currentBuckets: dynamicConfig.initialBuckets,
+        keys: [],
+        history: []
+      }
     }
 
     let newState: DynamicState | null = null
@@ -1966,20 +1998,24 @@ export default function App() {
         oldState: prevState,
         newState: newState
       })
-      
+
       await sleep(2500) // tiempo de visualización de la animación
-      
+
+      setDynamicState(newState)
       setAnimatingDynamic(null)
+    } else {
+      setDynamicState(newState)
     }
 
-    setDynamicState(newState)
     setMessage({ text: `Clave ${keyToProcess} procesada${action === 'delete' ? ' (borrado)' : ''}.`, tone: "ok" })
-    
+
     if (!autoKey) {
       setKeyInput("")
     }
     setBusy(false)
   }
+
+
 
   return (
     <div className="grid h-screen w-full grid-rows-[auto_1fr] bg-[#faf6f2] text-[#2b1610]">
@@ -1991,7 +2027,7 @@ export default function App() {
       />
 
       <div
-        className="grid min-h-0"
+        className="grid min-h-0 transition-[grid-template-columns] duration-300 ease-in-out"
         style={{ gridTemplateColumns: `${collapsed ? 64 : 196}px 1fr` }}
       >
         <Sidebar
@@ -2003,7 +2039,11 @@ export default function App() {
         />
 
         <main className="min-w-0 overflow-auto bg-[#faf6f2] p-8">
-          {!(isTableView || isTree || isDynamic) ? (
+          {isIndex ? (
+            <div className="mx-auto flex h-full max-w-6xl flex-col gap-5">
+              <ExternalIndexView onSave={handleSave} onOpen={handleOpen} />
+            </div>
+          ) : !(isTableView || isTree || isDynamic) ? (
             <div className="mx-auto flex h-full max-w-4xl flex-col items-center justify-center rounded-2xl border border-dashed border-[#52241A]/15 text-center">
               <p className="text-[13px] font-semibold uppercase tracking-[0.3em] text-[#52241A]/40">
                 {current.label}
@@ -2122,12 +2162,41 @@ export default function App() {
                     </select>
                   </label>
 
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#52241A]/60">
+                      Umbral Exp. (%)
+                    </span>
+                    <input
+                      type="number"
+                      min={50}
+                      max={95}
+                      value={dynamicConfig.expThreshold}
+                      onChange={(e) => handleDynamicConfigChange("expThreshold", parseInt(e.target.value) || 80)}
+                      disabled={!!dynamicState}
+                      className="h-10 w-20 rounded-lg border border-[#52241A]/20 bg-white px-2.5 text-[13px] text-[#2b1610] shadow-sm outline-none transition focus:border-[#6B2E24] focus:ring-2 focus:ring-[#E6B793] disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                  </label>
+
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#52241A]/60">
+                      Umbral Red. (%)
+                    </span>
+                    <input
+                      type="number"
+                      min={20}
+                      max={dynamicConfig.expThreshold - 5}
+                      value={dynamicConfig.redThreshold}
+                      onChange={(e) => handleDynamicConfigChange("redThreshold", parseInt(e.target.value) || 70)}
+                      disabled={!!dynamicState}
+                      className="h-10 w-20 rounded-lg border border-[#52241A]/20 bg-white px-2.5 text-[13px] text-[#2b1610] shadow-sm outline-none transition focus:border-[#6B2E24] focus:ring-2 focus:ring-[#E6B793] disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                  </label>
+
                   {!dynamicState ? (
                     <button onClick={() => {
-                      const capacity = dynamicConfig.initialBuckets * dynamicConfig.recordsPerBucket;
-                      const optimalExp = Math.max(70, Math.floor(((capacity - 1) / capacity) * 100));
-                      const optimalRed = Math.min(150, Math.floor(((dynamicConfig.initialBuckets + 1) / dynamicConfig.initialBuckets) * 100));
-                      const newConfig = { ...dynamicConfig, expThreshold: optimalExp, redThreshold: optimalRed };
+                      const exp = Math.min(95, Math.max(50, dynamicConfig.expThreshold || 80));
+                      const red = Math.min(exp - 5, Math.max(20, dynamicConfig.redThreshold || 70));
+                      const newConfig = { ...dynamicConfig, expThreshold: exp, redThreshold: red };
                       setDynamicConfig(newConfig);
                       setDynamicState({
                         config: newConfig,
@@ -2171,7 +2240,7 @@ export default function App() {
                 </div>
               )}
 
-              <div className="min-h-0 flex-1 flex gap-4">
+              <div className="min-h-0 flex-1 flex gap-4 w-full overflow-hidden items-start">
                 {isTree ? (
                   <TreeView treeData={treeData} />
                 ) : isDynamic ? (
@@ -2201,7 +2270,9 @@ export default function App() {
                   deleteKey={deleteKeyFromTree}
                   searchKey={handleTreeSearch}
                 />
-              ) : !isDynamic && (
+              ) : isDynamic ? (
+                null
+              ) : (
                 <BottomControls
                   isHash={isHash}
                   busy={busy}
@@ -2260,37 +2331,41 @@ export default function App() {
                 </div>
               )}
 
-              {message && (
-                <div
-                  className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-[13px] font-medium ${
-                    message.tone === "ok"
-                      ? "bg-[#2f7d4f]/12 text-[#256b42]"
-                      : message.tone === "warn"
-                      ? "bg-[#a23b2a]/12 text-[#a23b2a]"
-                      : "bg-[#52241A]/8 text-[#52241A]"
-                  }`}
-                >
-                  <span
-                    className={`inline-block size-2 shrink-0 rounded-full ${
-                      message.tone === "ok"
-                        ? "bg-[#2f7d4f]"
+              <AnimatePresence>
+                {message && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                    transition={{ duration: 0.2 }}
+                    className={`flex items-center gap-2.5 rounded-xl px-4 py-3 text-[13px] font-medium shadow-xs border ${message.tone === "ok"
+                        ? "bg-[#2f7d4f]/10 text-[#1f5c36] border-[#2f7d4f]/25"
                         : message.tone === "warn"
-                        ? "bg-[#a23b2a]"
-                        : "bg-[#52241A] motion-safe:animate-pulse"
-                    }`}
-                  />
-                  {message.text}
-                </div>
-              )}
+                          ? "bg-[#a23b2a]/10 text-[#852b1d] border-[#a23b2a]/25"
+                          : "bg-[#52241A]/8 text-[#52241A] border-[#52241A]/15"
+                      }`}
+                  >
+                    <span
+                      className={`inline-block size-2 shrink-0 rounded-full ${message.tone === "ok"
+                          ? "bg-[#2f7d4f] shadow-[0_0_6px_rgba(47,125,79,0.7)]"
+                          : message.tone === "warn"
+                            ? "bg-[#a23b2a] shadow-[0_0_6px_rgba(162,59,42,0.7)]"
+                            : "bg-[#52241A] motion-safe:animate-pulse"
+                        }`}
+                    />
+                    <span>{message.text}</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           )}
         </main>
       </div>
 
-      <ConfirmModal 
-        pendingChange={pendingChange} 
-        applyChange={applyChange} 
-        cancelChange={cancelChange} 
+      <ConfirmModal
+        pendingChange={pendingChange}
+        applyChange={applyChange}
+        cancelChange={cancelChange}
         activeOption={activeOption}
         hasInsertedData={hasInsertedData}
         hasTreeData={!!treeData}
