@@ -20,6 +20,37 @@ export default function ConfirmModal({
   if (!pendingChange) return null
 
   if (pendingChange.type === "section") {
+    if (pendingChange.sectionId === "grafos") {
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2b1610]/40 backdrop-blur-[2px] transition-all">
+          <div className="w-full max-w-md animate-in fade-in zoom-in-95 rounded-2xl bg-[#faf6f2] p-7 shadow-2xl ring-1 ring-[#52241A]/10">
+            <h3 className="text-xl font-semibold text-[#52241A]">
+              Cambiar a Grafos
+            </h3>
+            <p className="mt-3 text-[14px] leading-relaxed text-[#52241A]/75">
+              Estás a punto de abrir la sección de{" "}
+              <strong className="font-semibold text-[#6B2E24]">Grafos</strong>.
+              Tu estructura de búsqueda actual se reiniciará. ¿Deseas continuar?
+            </p>
+            <div className="mt-8 flex justify-end gap-3">
+              <button
+                onClick={() => cancelChange()}
+                className="h-10 rounded-lg border border-[#52241A]/20 bg-white px-4 text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => applyChange(pendingChange, false)}
+                className="h-10 rounded-lg bg-[#6B2E24] px-4 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#52241A] active:scale-[0.98]"
+              >
+                Ir a Grafos
+              </button>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
     const isCurrentTree = activeOption === "Árboles de Búsqueda"
     const isNewTree = pendingChange.option === "Árboles de Búsqueda"
     

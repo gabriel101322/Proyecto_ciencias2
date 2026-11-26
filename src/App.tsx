@@ -19,6 +19,7 @@ import ConfirmModal from "./components/ConfirmModal"
 import HuffmanExplanation from "./components/HuffmanExplanation"
 import DynamicTableView from "./components/DynamicTableView"
 import DynamicLogicPanel from "./components/DynamicLogicPanel"
+import GraphWorkspace from "./components/graphs/GraphWorkspace"
 import { insertDigitalTree, searchDigitalTree, deleteDigitalTree, insertRadixTree, searchRadixTree, deleteRadixTree, insertMultiRadixTree, searchMultiRadixTree, deleteMultiRadixTree, buildHuffmanTree } from "./utils/treeUtils"
 import { DynamicState, DynamicConfig, insertDynamicKey, deleteDynamicKey } from "./utils/dynamicHashUtils"
 
@@ -2003,7 +2004,38 @@ export default function App() {
         />
 
         <main className="min-w-0 overflow-auto bg-[#faf6f2] p-8">
-          {!(isTableView || isTree || isDynamic) ? (
+          {activeSection === "grafos" ? (
+            <div className="flex h-full flex-col gap-3">
+              <div className="min-h-0 flex-1">
+                <GraphWorkspace
+                  activeOption={activeOption}
+                  onNotify={(text, tone) => setMessage({ text, tone })}
+                />
+              </div>
+              {message && (
+                <div
+                  className={`mx-auto flex w-full max-w-7xl items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-medium ${
+                    message.tone === "ok"
+                      ? "bg-[#2f7d4f]/12 text-[#256b42]"
+                      : message.tone === "warn"
+                      ? "bg-[#a23b2a]/12 text-[#a23b2a]"
+                      : "bg-[#52241A]/8 text-[#52241A]"
+                  }`}
+                >
+                  <span
+                    className={`inline-block size-2 shrink-0 rounded-full ${
+                      message.tone === "ok"
+                        ? "bg-[#2f7d4f]"
+                        : message.tone === "warn"
+                        ? "bg-[#a23b2a]"
+                        : "bg-[#52241A] motion-safe:animate-pulse"
+                    }`}
+                  />
+                  {message.text}
+                </div>
+              )}
+            </div>
+          ) : !(isTableView || isTree || isDynamic) ? (
             <div className="mx-auto flex h-full max-w-4xl flex-col items-center justify-center rounded-2xl border border-dashed border-[#52241A]/15 text-center">
               <p className="text-[13px] font-semibold uppercase tracking-[0.3em] text-[#52241A]/40">
                 {current.label}
