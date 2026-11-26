@@ -344,13 +344,15 @@ export default function TableView({ rows, active, isHash, isExternal, collision,
           </div>
         )
       ) : (
-        <div className="flex h-full min-h-[300px] flex-col items-center justify-center gap-2 text-center bg-white">
-          <p className="text-sm font-medium text-[#52241A]/50">
-            Ingresa el tamaño del arreglo y presiona
-            <span className="font-semibold text-[#52241A]"> Generar arreglo</span>.
-          </p>
-          <p className="text-xs text-[#52241A]/35">
-            Se crearán las posiciones vacías listas para insertar claves.
+        <div className="flex h-full min-h-[320px] flex-col items-center justify-center p-8 text-center bg-white/70">
+          <div className="size-16 rounded-2xl bg-[#E6B793]/25 border border-[#E6B793]/40 grid place-items-center mb-3.5 text-[#52241A] shadow-xs">
+            <svg viewBox="0 0 24 24" className="size-8" fill="none" stroke="currentColor" strokeWidth={1.8}>
+              <path d="M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5Zm0 5h18M3 15h18M10 3v18" />
+            </svg>
+          </div>
+          <h4 className="text-base font-bold text-[#52241A]">Tabla no inicializada</h4>
+          <p className="mt-1 max-w-sm text-xs text-[#52241A]/60 leading-relaxed">
+            Ingresa el tamaño deseado en el panel superior y presiona <strong className="font-semibold text-[#6B2E24]">"Generar arreglo"</strong> para comenzar a insertar o buscar claves.
           </p>
         </div>
       )}

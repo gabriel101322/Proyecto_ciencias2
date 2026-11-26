@@ -84,7 +84,10 @@ export function TopTreeControls({
           </svg>
           Guardar
         </button>
-        <button className="flex h-10 items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-2.5 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5">
+        <button
+          onClick={() => window.print()}
+          className="flex h-10 items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-2.5 text-[12px] xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5 active:scale-[0.98]"
+        >
           <svg
             viewBox="0 0 24 24"
             className="size-4"
