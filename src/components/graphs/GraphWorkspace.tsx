@@ -216,6 +216,8 @@ export default function GraphWorkspace({ activeOption, onNotify }: GraphWorkspac
   const [stepIdx, setStepIdx] = useState<number>(0)
   const [isPlaying, setIsPlaying] = useState<boolean>(false)
   const [speedMs, setSpeedMs] = useState<number>(1200)
+  const [showLogicPanel, setShowLogicPanel] = useState<boolean>(true)
+  const [binaryOpViewMode, setBinaryOpViewMode] = useState<"vertices" | "edges">("edges")
 
   // Resaltado cruzado matriz <-> grafo
   const [hoveredVertexId, setHoveredVertexId] = useState<string | null>(null)
@@ -669,6 +671,21 @@ export default function GraphWorkspace({ activeOption, onNotify }: GraphWorkspac
   const activeStep = steps.length > 0 ? steps[Math.min(stepIdx, steps.length - 1)] : null
   const displayedMainGraph = activeStep?.overrideGraph ?? graph
 
+  // Grafo resultante directo para Operaciones entre grafos (siempre completo con vértices y aristas)
+  const binaryResultGraph = useMemo(() => {
+    if (steps.length === 0) {
+      return { directed: false, weighted: false, vertices: [], edges: [] }
+    }
+    return (
+      steps[steps.length - 1]?.overrideGraph ?? {
+        directed: false,
+        weighted: false,
+        vertices: [],
+        edges: [],
+      }
+    )
+  }, [steps])
+
   // Si está en Modo Laboratorio de conjuntos independientes/dominantes, construir estados visuales propios
   const labVertexStates = useMemo(() => {
     if (!labInteractiveSet) return undefined
@@ -697,21 +714,23 @@ export default function GraphWorkspace({ activeOption, onNotify }: GraphWorkspac
   const headerMeta = TOPIC_HEADERS[topic] ?? { title: topic, subtitle: "" }
 
   return (
-    <div className="mx-auto flex h-full max-w-7xl flex-col gap-3.5">
+    <div className="flex h-full w-full min-h-0 min-w-0 flex-col gap-2">
       {/* 1. Barra Superior: Título Académico + Herramientas de Edición + Archivo */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#52241A]/15 bg-white px-4 py-2.5 shadow-2xs">
-        <div>
-          <h2 className="text-base font-bold text-[#52241A]">{headerMeta.title}</h2>
-          <p className="text-xs text-[#52241A]/65">{headerMeta.subtitle}</p>
+      <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-xl border border-[#52241A]/15 bg-white px-3 py-1.5 shadow-2xs shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
+          <h2 className="text-sm font-bold text-[#52241A] whitespace-nowrap">{headerMeta.title}</h2>
+          {headerMeta.subtitle && (
+            <span className="hidden xl:inline text-[11px] text-[#52241A]/65">• {headerMeta.subtitle}</span>
+          )}
         </div>
 
         {/* Barra de herramientas del lienzo */}
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1">
           {(
             [
               { id: "move", label: "✋ Mover" },
-              { id: "add_vertex", label: "⊕ + Vértice" },
-              { id: "add_edge", label: "↗ + Arista" },
+              { id: "add_vertex", label: "⊕ Vértice" },
+              { id: "add_edge", label: "↗ Arista" },
               { id: "delete", label: "⌫ Borrar" },
             ] as const
           ).map((t) => (
@@ -722,7 +741,7 @@ export default function GraphWorkspace({ activeOption, onNotify }: GraphWorkspac
                 setLabInteractiveSet(false)
                 setTool(t.id)
               }}
-              className={`h-8 rounded-lg px-2.5 text-xs font-semibold transition ${
+              className={`h-7 rounded-lg px-2 text-[11px] font-semibold transition ${
                 tool === t.id && !labInteractiveSet
                   ? "bg-[#52241A] text-white shadow-xs"
                   : "border border-[#52241A]/15 bg-[#faf6f2] text-[#52241A] hover:bg-[#E6B793]/30"
@@ -733,13 +752,13 @@ export default function GraphWorkspace({ activeOption, onNotify }: GraphWorkspac
           ))}
 
           {tool === "add_edge" && graph.weighted && topic !== "Operaciones entre grafos" && (
-            <label className="flex items-center gap-1 rounded-lg border border-[#52241A]/20 bg-white px-2 py-1 text-xs">
+            <label className="flex items-center gap-1 rounded-lg border border-[#52241A]/20 bg-white px-1.5 py-0.5 text-[11px]">
               <span className="font-semibold text-[#52241A]/70">Peso:</span>
               <input
                 type="number"
                 value={defaultEdgeWeight}
                 onChange={(e) => setDefaultEdgeWeight(Number(e.target.value) || 1)}
-                className="w-12 font-mono font-bold text-[#52241A] outline-none"
+                className="w-10 font-mono font-bold text-[#52241A] outline-none text-xs"
               />
             </label>
           )}
@@ -751,7 +770,7 @@ export default function GraphWorkspace({ activeOption, onNotify }: GraphWorkspac
                 onClick={() =>
                   mutateTargetGraph((g) => ({ ...g, directed: !g.directed }))
                 }
-                className={`h-8 rounded-lg border px-2.5 text-xs font-semibold transition ${
+                className={`h-7 rounded-lg border px-2 text-[11px] font-semibold transition ${
                   graph.directed
                     ? "border-[#6B2E24] bg-[#E6B793]/40 text-[#52241A]"
                     : "border-[#52241A]/15 bg-white text-[#52241A]/75 hover:bg-[#faf6f2]"
@@ -765,7 +784,7 @@ export default function GraphWorkspace({ activeOption, onNotify }: GraphWorkspac
                 onClick={() =>
                   mutateTargetGraph((g) => ({ ...g, weighted: !g.weighted }))
                 }
-                className={`h-8 rounded-lg border px-2.5 text-xs font-semibold transition ${
+                className={`h-7 rounded-lg border px-2 text-[11px] font-semibold transition ${
                   graph.weighted
                     ? "border-[#6B2E24] bg-[#E6B793]/40 text-[#52241A]"
                     : "border-[#52241A]/15 bg-white text-[#52241A]/75 hover:bg-[#faf6f2]"
@@ -836,9 +855,9 @@ export default function GraphWorkspace({ activeOption, onNotify }: GraphWorkspac
               }
               onNotify("Ejemplo guiado cargado.", "info")
             }}
-            className="h-8 rounded-lg bg-[#E6B793]/35 px-2.5 text-xs font-bold text-[#52241A] transition hover:bg-[#E6B793]/60"
+            className="h-7 rounded-lg bg-[#E6B793]/35 px-2 text-[11px] font-bold text-[#52241A] transition hover:bg-[#E6B793]/60"
           >
-            ↺ Ejemplo Guiado
+            ↺ Ejemplo
           </button>
 
           <button
@@ -854,29 +873,29 @@ export default function GraphWorkspace({ activeOption, onNotify }: GraphWorkspac
                 setSteps([])
               }
             }}
-            className="h-8 rounded-lg border border-[#52241A]/15 bg-white px-2.5 text-xs font-medium text-[#52241A]/75 hover:bg-[#52241A]/5"
+            className="h-7 rounded-lg border border-[#52241A]/15 bg-white px-2 text-[11px] font-medium text-[#52241A]/75 hover:bg-[#52241A]/5"
           >
             Vaciar
           </button>
         </div>
 
         {/* Abrir / Guardar / Imprimir */}
-        <div className="flex items-center gap-1.5">
-          <label className="flex h-8 cursor-pointer items-center gap-1 rounded-lg border border-[#52241A]/20 bg-white px-2.5 text-xs font-medium text-[#52241A] shadow-2xs hover:bg-[#52241A]/5">
+        <div className="flex items-center gap-1 shrink-0">
+          <label className="flex h-7 cursor-pointer items-center gap-1 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[11px] font-medium text-[#52241A] shadow-2xs hover:bg-[#52241A]/5">
             <input type="file" accept=".json" className="hidden" onChange={handleOpenGraphJson} />
             Abrir
           </label>
           <button
             type="button"
             onClick={handleSaveGraphJson}
-            className="h-8 rounded-lg border border-[#52241A]/20 bg-white px-2.5 text-xs font-medium text-[#52241A] shadow-2xs hover:bg-[#52241A]/5"
+            className="h-7 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[11px] font-medium text-[#52241A] shadow-2xs hover:bg-[#52241A]/5"
           >
             Guardar
           </button>
           <button
             type="button"
             onClick={() => window.print()}
-            className="h-8 rounded-lg border border-[#52241A]/20 bg-white px-2.5 text-xs font-medium text-[#52241A] shadow-2xs hover:bg-[#52241A]/5"
+            className="h-7 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[11px] font-medium text-[#52241A] shadow-2xs hover:bg-[#52241A]/5"
           >
             Imprimir
           </button>
@@ -884,7 +903,7 @@ export default function GraphWorkspace({ activeOption, onNotify }: GraphWorkspac
       </div>
 
       {/* 2. Barra de Controles Específicos del Tema Activo */}
-      <div className="flex flex-wrap items-center gap-2.5 rounded-2xl border border-[#52241A]/12 bg-[#faf6f2] px-4 py-2.5 shadow-2xs">
+      <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-[#52241A]/12 bg-[#faf6f2] px-3 py-1.5 shadow-2xs shrink-0 text-xs">
         {/* TEMA 1: CAMINOS MÍNIMOS */}
         {topic === "Caminos mínimos" && (
           <>
@@ -1420,15 +1439,15 @@ export default function GraphWorkspace({ activeOption, onNotify }: GraphWorkspac
       </div>
 
       {/* 3. Área Principal Dividida: Lienzo(s) Gráfico(s) + Panel Paso a Paso / Matrices */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-12">
+      <div className="flex min-h-0 min-w-0 flex-1 gap-2.5 overflow-hidden">
         {/* Columna Izquierda: Visualización del Grafo */}
-        <div className="flex min-h-0 flex-col gap-3 lg:col-span-7">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 h-full overflow-hidden">
           {topic === "Operaciones entre grafos" ? (
             <>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 flex-1 min-h-0">
                 <div
                   onClick={() => setActiveDualTarget("G1")}
-                  className={`flex flex-col rounded-2xl transition ${
+                  className={`flex flex-col rounded-2xl transition h-full min-h-0 flex-1 ${
                     activeDualTarget === "G1" ? "ring-2 ring-[#6B2E24]" : ""
                   }`}
                 >
@@ -1446,7 +1465,7 @@ export default function GraphWorkspace({ activeOption, onNotify }: GraphWorkspac
                 </div>
                 <div
                   onClick={() => setActiveDualTarget("G2")}
-                  className={`flex flex-col rounded-2xl transition ${
+                  className={`flex flex-col rounded-2xl transition h-full min-h-0 flex-1 ${
                     activeDualTarget === "G2" ? "ring-2 ring-[#6B2E24]" : ""
                   }`}
                 >
@@ -1465,19 +1484,16 @@ export default function GraphWorkspace({ activeOption, onNotify }: GraphWorkspac
               </div>
 
               <GraphCanvas
-                graph={
-                  activeStep?.overrideGraph ?? {
-                    directed: false,
-                    weighted: false,
-                    vertices: [],
-                    edges: [],
-                  }
-                }
+                graph={binaryResultGraph}
                 title="Grafo Resultado"
                 compact
                 readOnly
-                vertexStates={activeStep?.vertexStates}
-                edgeStates={activeStep?.edgeStates}
+                vertexStates={
+                  binaryOpViewMode === "vertices"
+                    ? steps[0]?.vertexStates
+                    : steps[steps.length - 1]?.vertexStates
+                }
+                edgeStates={steps[steps.length - 1]?.edgeStates}
               />
             </>
           ) : (
@@ -1511,75 +1527,286 @@ export default function GraphWorkspace({ activeOption, onNotify }: GraphWorkspac
         </div>
 
         {/* Columna Derecha: Explicación Paso a Paso o Vista Simultánea de 4 Representaciones */}
-        <div className="flex min-h-0 flex-col lg:col-span-5">
-          {topic === "Representación matricial" && reprMode === "interactive" ? (
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#52241A]/15 bg-white shadow-sm">
-              <div className="border-b border-[#52241A]/15 bg-[#52241A] px-4 py-2.5 text-white">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#E6B793]">
-                  Adyacencia e Incidencia (En Matriz y en Lista)
-                </span>
-                <p className="mt-0.5 text-[11px] text-white/75">
-                  Pasa el cursor sobre cualquier fila o nodo enlazado para iluminarlo en el grafo.
-                </p>
+        {showLogicPanel ? (
+          <div
+            className={`flex min-h-0 min-w-0 flex-col h-full overflow-hidden shrink-0 transition-all duration-300 ${
+              topic === "Operaciones entre grafos"
+                ? "w-72 sm:w-80 xl:w-84"
+                : topic === "Representación matricial" && reprMode === "interactive"
+                ? "w-80 lg:w-96 xl:w-[440px]"
+                : "w-72 lg:w-80 xl:w-96"
+            }`}
+          >
+            {topic === "Operaciones entre grafos" ? (
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#52241A]/15 bg-white shadow-sm h-full">
+                {/* Encabezado sin slider ni controles de reproducción */}
+                <div className="border-b border-[#52241A]/15 bg-[#52241A] px-3.5 py-2 text-white shrink-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#E6B793] truncate">
+                      Explicación de la Operación
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowLogicPanel(false)}
+                      title="Minimizar panel"
+                      className="flex size-6 items-center justify-center rounded-md bg-white/10 text-white/80 hover:bg-white/20 hover:text-white transition"
+                    >
+                      <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                        <path d="m9 18 6-6-6-6" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Contenido: cálculo directo y selección de Vértices / Aristas */}
+                <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-[#faf6f2]/35 p-3">
+                  {steps.length === 0 ? (
+                    <div className="flex h-full min-h-[180px] flex-col items-center justify-center px-4 text-center">
+                      <p className="text-sm font-medium text-[#52241A]/55">
+                        Agrega vértices a G₁ y G₂ o carga un Ejemplo Guiado para iniciar.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Tarjetas interactivas para SELECCIONAR Vértices o Aristas */}
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#52241A]/60">
+                          Seleccionar regla / detalle:
+                        </span>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setBinaryOpViewMode("vertices")}
+                            className={`flex flex-col rounded-xl border p-2.5 text-left transition-all ${
+                              binaryOpViewMode === "vertices"
+                                ? "border-[#2f7d4f] bg-[#2f7d4f]/15 text-[#1f5c39] ring-2 ring-[#2f7d4f]/30 shadow-xs"
+                                : "border-[#52241A]/15 bg-white text-[#52241A] hover:bg-[#faf6f2] hover:border-[#52241A]/30"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider opacity-80">
+                              <span>Vértices |V|</span>
+                              {binaryOpViewMode === "vertices" && (
+                                <span className="text-[10px] font-bold text-[#2f7d4f]">✓ Activo</span>
+                              )}
+                            </div>
+                            <div className="mt-1 font-mono text-base font-bold">
+                              {binaryResultGraph.vertices.length}
+                            </div>
+                            <span className="text-[10px] opacity-75 mt-0.5">
+                              {binaryOpViewMode === "vertices" ? "Mostrando regla" : "Clic para ver regla"}
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setBinaryOpViewMode("edges")}
+                            className={`flex flex-col rounded-xl border p-2.5 text-left transition-all ${
+                              binaryOpViewMode === "edges"
+                                ? "border-[#2f7d4f] bg-[#2f7d4f]/15 text-[#1f5c39] ring-2 ring-[#2f7d4f]/30 shadow-xs"
+                                : "border-[#52241A]/15 bg-white text-[#52241A] hover:bg-[#faf6f2] hover:border-[#52241A]/30"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider opacity-80">
+                              <span>Aristas |E|</span>
+                              {binaryOpViewMode === "edges" && (
+                                <span className="text-[10px] font-bold text-[#2f7d4f]">✓ Activo</span>
+                              )}
+                            </div>
+                            <div className="mt-1 font-mono text-base font-bold">
+                              {binaryResultGraph.edges.length}
+                            </div>
+                            <span className="text-[10px] opacity-75 mt-0.5">
+                              {binaryOpViewMode === "edges" ? "Mostrando regla" : "Clic para ver regla"}
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Tarjeta explicativa según el modo seleccionado */}
+                      {binaryOpViewMode === "vertices" ? (
+                        <div className="space-y-2.5">
+                          <div className="rounded-xl border border-[#E6B793]/60 bg-white p-3.5 shadow-2xs">
+                            <h4 className="text-[13px] font-bold text-[#52241A]">
+                              {steps[0]?.title ?? "Conjunto de Vértices"}
+                            </h4>
+                            <p className="mt-1.5 text-[12px] leading-relaxed text-[#2b1610]/85">
+                              {steps[0]?.description}
+                            </p>
+                            {steps[0]?.formula && (
+                              <div className="mt-2.5 overflow-x-auto rounded-lg border border-[#52241A]/12 bg-[#faf6f2] px-3 py-2 font-mono text-[11.5px] font-semibold text-[#6B2E24]">
+                                {steps[0].formula}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Badges de pertenencia de vértices */}
+                          {binaryResultGraph.vertices.length > 0 && steps[0]?.vertexStates && (
+                            <div className="rounded-xl border border-[#52241A]/12 bg-white p-3 shadow-2xs">
+                              <div className="mb-1.5 text-[10.5px] font-bold uppercase tracking-wider text-[#52241A]/65">
+                                Clasificación en el Grafo Resultado
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {binaryResultGraph.vertices.map((v) => {
+                                  const st = steps[0]?.vertexStates?.[v.id]
+                                  return (
+                                    <span
+                                      key={v.id}
+                                      className="inline-flex items-center gap-1 rounded-md border border-[#52241A]/15 bg-[#faf6f2] px-2 py-1 font-mono text-[11px] font-semibold text-[#52241A]"
+                                    >
+                                      <span>{v.label}</span>
+                                      {st?.badge && (
+                                        <span className="rounded bg-[#52241A]/10 px-1 text-[9.5px] font-bold text-[#6B2E24]">
+                                          {st.badge}
+                                        </span>
+                                      )}
+                                    </span>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-2.5">
+                          {/* Información de Aristas (último paso) */}
+                          {(() => {
+                            const edgeStep = steps[steps.length - 1]
+                            return (
+                              <>
+                                <div className="rounded-xl border border-[#E6B793]/60 bg-white p-3.5 shadow-2xs">
+                                  <h4 className="text-[13px] font-bold text-[#52241A]">
+                                    {edgeStep?.title ?? "Construcción de Aristas"}
+                                  </h4>
+                                  <p className="mt-1.5 text-[12px] leading-relaxed text-[#2b1610]/85">
+                                    {edgeStep?.description}
+                                  </p>
+                                  {edgeStep?.formula && (
+                                    <div className="mt-2.5 overflow-x-auto rounded-lg border border-[#52241A]/12 bg-[#faf6f2] px-3 py-2 font-mono text-[11.5px] font-semibold text-[#6B2E24]">
+                                      {edgeStep.formula}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Detalle de evaluaciones de aristas */}
+                                {edgeStep?.detailList && edgeStep.detailList.length > 0 && (
+                                  <div className="rounded-xl border border-[#52241A]/12 bg-white p-3 shadow-2xs">
+                                    <div className="mb-1.5 text-[10.5px] font-bold uppercase tracking-wider text-[#52241A]/65">
+                                      Detalle de Evaluaciones ({edgeStep.detailList.length})
+                                    </div>
+                                    <ul className="space-y-1 text-xs text-[#2b1610]/85 max-h-56 overflow-y-auto pr-1">
+                                      {edgeStep.detailList.map((line, i) => (
+                                        <li
+                                          key={i}
+                                          className="rounded-md bg-[#faf6f2]/80 px-2.5 py-1 font-mono text-[11px] leading-snug border border-[#52241A]/8"
+                                        >
+                                          {line}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </>
+                            )
+                          })()}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
-              <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto bg-[#faf6f2]/35 p-4">
-                <MatrixTableView
-                  matrix={liveRepresentations.adjacencyMatrix}
-                  onHoverRowVertexLabel={(lbl) => {
-                    const found = graph.vertices.find((v) => v.label === lbl)
-                    setHoveredVertexId(found?.id ?? null)
-                  }}
-                />
-                <LinkedListView
-                  title="Lista de Adyacencia"
-                  subtitle="Cada vértice apunta dinámicamente a la lista enlazada de sus vecinos directos."
-                  entries={liveRepresentations.adjacencyList}
-                  onHoverVertex={setHoveredVertexId}
-                  onHoverEdge={setHoveredEdgeId}
-                />
-                <MatrixTableView
-                  matrix={liveRepresentations.incidenceMatrix}
-                  onHoverRowVertexLabel={(lbl) => {
-                    const found = graph.vertices.find((v) => v.label === lbl)
-                    setHoveredVertexId(found?.id ?? null)
-                  }}
-                />
-                <LinkedListView
-                  title="Lista de Incidencia"
-                  subtitle="Cada vértice enlaza todas las aristas eₖ que inciden sobre él."
-                  entries={liveRepresentations.incidenceList}
-                  onHoverVertex={setHoveredVertexId}
-                  onHoverEdge={setHoveredEdgeId}
-                />
+            ) : topic === "Representación matricial" && reprMode === "interactive" ? (
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#52241A]/15 bg-white shadow-sm h-full">
+                <div className="border-b border-[#52241A]/15 bg-[#52241A] px-3.5 py-1.5 text-white shrink-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#E6B793] truncate">
+                      Adyacencia e Incidencia
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowLogicPanel(false)}
+                      title="Minimizar panel"
+                      className="flex size-6 items-center justify-center rounded-md bg-white/10 text-white/80 hover:bg-white/20 hover:text-white transition"
+                    >
+                      <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                        <path d="m9 18 6-6-6-6" />
+                      </svg>
+                    </button>
+                  </div>
+                  <p className="mt-0.5 text-[10.5px] text-white/75 truncate">
+                    Pasa el cursor sobre cualquier fila o nodo enlazado para iluminarlo en el grafo.
+                  </p>
+                </div>
+                <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto bg-[#faf6f2]/35 p-3">
+                  <MatrixTableView
+                    matrix={liveRepresentations.adjacencyMatrix}
+                    onHoverRowVertexLabel={(lbl) => {
+                      const found = graph.vertices.find((v) => v.label === lbl)
+                      setHoveredVertexId(found?.id ?? null)
+                    }}
+                  />
+                  <LinkedListView
+                    title="Lista de Adyacencia"
+                    subtitle="Cada vértice apunta dinámicamente a la lista enlazada de sus vecinos directos."
+                    entries={liveRepresentations.adjacencyList}
+                    onHoverVertex={setHoveredVertexId}
+                    onHoverEdge={setHoveredEdgeId}
+                  />
+                  <MatrixTableView
+                    matrix={liveRepresentations.incidenceMatrix}
+                    onHoverRowVertexLabel={(lbl) => {
+                      const found = graph.vertices.find((v) => v.label === lbl)
+                      setHoveredVertexId(found?.id ?? null)
+                    }}
+                  />
+                  <LinkedListView
+                    title="Lista de Incidencia"
+                    subtitle="Cada vértice enlaza todas las aristas eₖ que inciden sobre él."
+                    entries={liveRepresentations.incidenceList}
+                    onHoverVertex={setHoveredVertexId}
+                    onHoverEdge={setHoveredEdgeId}
+                  />
+                </div>
               </div>
-            </div>
-          ) : (
-            <GraphStepPlayer
-              steps={steps}
-              currentStepIndex={stepIdx}
-              isPlaying={isPlaying}
-              speedMs={speedMs}
-              onStepChange={(idx) => {
-                setIsPlaying(false)
-                setStepIdx(idx)
-              }}
-              onTogglePlay={() => {
-                if (stepIdx >= steps.length - 1) setStepIdx(0)
-                setIsPlaying((p) => !p)
-              }}
-              onSpeedChange={setSpeedMs}
-              onHoverVertexLabel={(lbl) => {
-                const found = displayedMainGraph.vertices.find((v) => v.label === lbl)
-                setHoveredVertexId(found?.id ?? null)
-              }}
-              emptyHint={
-                topic === "Operaciones sobre un grafo"
-                  ? "Ejecuta Insertar, Borrar, Fusionar o Complemento en la barra superior para ver la demostración paso a paso."
-                  : "Agrega vértices o carga un Ejemplo Guiado para iniciar."
-              }
-            />
-          )}
-        </div>
+            ) : (
+              <GraphStepPlayer
+                steps={steps}
+                currentStepIndex={stepIdx}
+                isPlaying={isPlaying}
+                speedMs={speedMs}
+                onStepChange={(idx) => {
+                  setIsPlaying(false)
+                  setStepIdx(idx)
+                }}
+                onTogglePlay={() => {
+                  if (stepIdx >= steps.length - 1) setStepIdx(0)
+                  setIsPlaying((p) => !p)
+                }}
+                onSpeedChange={setSpeedMs}
+                onHoverVertexLabel={(lbl) => {
+                  const found = displayedMainGraph.vertices.find((v) => v.label === lbl)
+                  setHoveredVertexId(found?.id ?? null)
+                }}
+                onToggleCollapse={() => setShowLogicPanel(false)}
+                emptyHint={
+                  topic === "Operaciones sobre un grafo"
+                    ? "Ejecuta Insertar, Borrar, Fusionar o Complemento en la barra superior para ver la demostración paso a paso."
+                    : "Agrega vértices o carga un Ejemplo Guiado para iniciar."
+                }
+              />
+            )}
+          </div>
+        ) : (
+          <div className="flex shrink-0 h-full items-start">
+            <button
+              type="button"
+              onClick={() => setShowLogicPanel(true)}
+              className="flex items-center gap-1.5 rounded-xl border border-[#52241A]/20 bg-white px-2 py-4 text-xs font-bold text-[#52241A] shadow-sm hover:bg-[#faf6f2] transition [writing-mode:vertical-lr]"
+              title="Mostrar Explicación Paso a Paso"
+            >
+              <span>◀ Explicación</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

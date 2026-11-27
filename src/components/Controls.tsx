@@ -43,7 +43,7 @@ export function TopControls({
   onOpen,
 }: TopControlsProps) {
   return (
-    <div className="flex items-end gap-1.5">
+    <div className="flex flex-wrap items-end gap-3.5">
       <label className="flex flex-col gap-1.5">
         <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#52241A]/60">
           Tamaño de la clave
@@ -104,20 +104,20 @@ export function TopControls({
       <button
         onClick={generateTable}
         disabled={hasData || busy}
-        className="h-10 shrink-0 rounded-lg bg-[#52241A] px-2 text-[12px] xl:px-3 xl:text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#6B2E24] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 hover:disabled:bg-[#52241A]"
+        className="h-10 shrink-0 rounded-lg bg-[#52241A] px-3.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#6B2E24] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 hover:disabled:bg-[#52241A]"
       >
         Generar arreglo
       </button>
       <button
         onClick={clearTable}
         disabled={busy}
-        className="h-10 shrink-0 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-3 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5 disabled:cursor-not-allowed disabled:opacity-50"
+        className="h-10 shrink-0 rounded-lg border border-[#52241A]/20 bg-white px-3.5 text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5 disabled:cursor-not-allowed disabled:opacity-50"
       >
         Borrar arreglo
       </button>
 
-      <div className="ml-auto flex items-end gap-1.5">
-        <label className="flex h-10 cursor-pointer items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-2.5 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5">
+      <div className="ml-auto flex items-end gap-2.5">
+        <label className="flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-3 text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5">
           <input type="file" accept=".json" className="hidden" onChange={onOpen} />
           <svg
             viewBox="0 0 24 24"
@@ -132,7 +132,7 @@ export function TopControls({
           </svg>
           Abrir
         </label>
-        <button onClick={onSave} className="flex h-10 items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-2.5 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5">
+        <button onClick={onSave} className="flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-3 text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5">
           <svg
             viewBox="0 0 24 24"
             className="size-4"
@@ -149,7 +149,7 @@ export function TopControls({
         </button>
         <button
           onClick={() => window.print()}
-          className="flex h-10 items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-2.5 text-[12px] xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5 active:scale-[0.98]"
+          className="flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-3 text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5 active:scale-[0.98]"
         >
           <svg
             viewBox="0 0 24 24"
@@ -211,7 +211,7 @@ export function BottomControls({
   const [doubleHashOpen, setDoubleHashOpen] = useState(false)
 
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex flex-wrap items-center gap-3">
       <span className="shrink-0 text-sm font-semibold text-[#52241A]">
         Clave:
       </span>
@@ -235,7 +235,7 @@ export function BottomControls({
               !collision ||
               (collision === "Doble Función Hash" && !doubleHash)))
         }
-        className="h-10 shrink-0 rounded-lg bg-[#6B2E24] px-2 text-[12px] xl:px-3 xl:text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#52241A] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+        className="h-10 shrink-0 rounded-lg bg-[#6B2E24] px-3.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#52241A] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
       >
         Insertar clave
       </button>
@@ -249,14 +249,14 @@ export function BottomControls({
               !collision ||
               (collision === "Doble Función Hash" && !doubleHash)))
         }
-        className="h-10 shrink-0 rounded-lg bg-[#E6B793] text-[#52241A] px-2 text-[12px] xl:px-3 xl:text-[13px] font-bold shadow-sm transition hover:bg-[#D5A37F] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+        className="h-10 shrink-0 rounded-lg bg-[#E6B793] text-[#52241A] px-3.5 text-[13px] font-bold shadow-sm transition hover:bg-[#D5A37F] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
       >
         Insertar Auto
       </button>
       <button
         onClick={deleteSequential}
         disabled={busy || !hasRows}
-        className="h-10 shrink-0 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-3 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5 disabled:cursor-not-allowed disabled:opacity-50"
+        className="h-10 shrink-0 rounded-lg border border-[#52241A]/20 bg-white px-3.5 text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5 disabled:cursor-not-allowed disabled:opacity-50"
       >
         Borrar clave
       </button>
@@ -264,7 +264,7 @@ export function BottomControls({
       <button
         onClick={handleSearch}
         disabled={busy || !hasRows || !keyInput.trim()}
-        className="h-10 shrink-0 rounded-lg bg-[#6B2E24] px-2 text-[12px] xl:px-3 xl:text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#52241A] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+        className="h-10 shrink-0 rounded-lg bg-[#6B2E24] px-4 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#52241A] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
       >
         Buscar
       </button>
@@ -276,7 +276,7 @@ export function BottomControls({
           </span>
           <button
             onClick={() => setCollisionOpen((o) => !o)}
-            className="flex h-10 items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-3 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5"
+            className="flex h-10 shrink-0 items-center gap-2 rounded-lg border border-[#52241A]/20 bg-white px-3 text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5"
           >
             <span className="font-semibold">
               {collision || "Seleccione..."}

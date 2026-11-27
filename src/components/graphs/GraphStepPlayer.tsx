@@ -11,6 +11,7 @@ interface GraphStepPlayerProps {
   onSpeedChange: (ms: number) => void
   onHoverVertexLabel?: (label: string | null) => void
   emptyHint?: string
+  onToggleCollapse?: () => void
 }
 
 export default function GraphStepPlayer({
@@ -23,24 +24,39 @@ export default function GraphStepPlayer({
   onSpeedChange,
   onHoverVertexLabel,
   emptyHint = "Ejecuta el algoritmo para explorar la explicación paso a paso.",
+  onToggleCollapse,
 }: GraphStepPlayerProps) {
   const total = steps.length
   const safeIdx = Math.min(Math.max(0, currentStepIndex), Math.max(0, total - 1))
   const step = total > 0 ? steps[safeIdx] : null
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#52241A]/15 bg-white shadow-sm">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#52241A]/15 bg-white shadow-sm h-full">
       {/* Encabezado y Controles de Reproducción */}
-      <div className="border-b border-[#52241A]/15 bg-[#52241A] px-4 py-2.5 text-white">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#E6B793]">
+      <div className="border-b border-[#52241A]/15 bg-[#52241A] px-3.5 py-1.5 text-white shrink-0">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#E6B793] truncate">
             Explicación Paso a Paso
           </span>
-          {total > 0 && (
-            <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-[11px] font-semibold text-white">
-              Paso {safeIdx + 1} de {total}
-            </span>
-          )}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {total > 0 && (
+              <span className="rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-semibold text-white">
+                Paso {safeIdx + 1} de {total}
+              </span>
+            )}
+            {onToggleCollapse && (
+              <button
+                type="button"
+                onClick={onToggleCollapse}
+                title="Minimizar panel de explicación"
+                className="flex size-6 items-center justify-center rounded-md bg-white/10 text-white/80 hover:bg-white/20 hover:text-white transition"
+              >
+                <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
 
         {total > 0 && (
@@ -114,7 +130,7 @@ export default function GraphStepPlayer({
       </div>
 
       {/* Contenido Pedagógico del Paso Actual */}
-      <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto bg-[#faf6f2]/35 p-4">
+      <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto bg-[#faf6f2]/35 p-3">
         {!step ? (
           <div className="flex h-full min-h-[180px] flex-col items-center justify-center px-4 text-center">
             <p className="text-sm font-medium text-[#52241A]/55">{emptyHint}</p>
