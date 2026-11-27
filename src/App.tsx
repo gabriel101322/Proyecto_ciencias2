@@ -20,6 +20,7 @@ import ConfirmModal from "./components/ConfirmModal"
 import HuffmanExplanation from "./components/HuffmanExplanation"
 import DynamicTableView from "./components/DynamicTableView"
 import DynamicLogicPanel from "./components/DynamicLogicPanel"
+import GraphWorkspace from "./components/graphs/GraphWorkspace"
 import ExternalIndexView from "./components/ExternalIndexView"
 import { insertDigitalTree, searchDigitalTree, deleteDigitalTree, insertRadixTree, searchRadixTree, deleteRadixTree, insertMultiRadixTree, searchMultiRadixTree, deleteMultiRadixTree, buildHuffmanTree } from "./utils/treeUtils"
 import { DynamicState, DynamicConfig, insertDynamicKey, deleteDynamicKey } from "./utils/dynamicHashUtils"
@@ -2039,7 +2040,44 @@ export default function App() {
         />
 
         <main className="min-w-0 overflow-auto bg-[#faf6f2] p-8">
-          {isIndex ? (
+          {activeSection === "grafos" ? (
+            <div className="flex h-full flex-col gap-3">
+              <div className="min-h-0 flex-1">
+                <GraphWorkspace
+                  activeOption={activeOption}
+                  onNotify={(text, tone) => setMessage({ text, tone })}
+                />
+              </div>
+              <AnimatePresence>
+                {message && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                    transition={{ duration: 0.2 }}
+                    className={`mx-auto flex w-full max-w-7xl items-center gap-2.5 rounded-xl px-4 py-3 text-[13px] font-medium shadow-xs border ${
+                      message.tone === "ok"
+                        ? "bg-[#2f7d4f]/10 text-[#1f5c36] border-[#2f7d4f]/25"
+                        : message.tone === "warn"
+                        ? "bg-[#a23b2a]/10 text-[#852b1d] border-[#a23b2a]/25"
+                        : "bg-[#52241A]/8 text-[#52241A] border-[#52241A]/15"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block size-2 shrink-0 rounded-full ${
+                        message.tone === "ok"
+                          ? "bg-[#2f7d4f] shadow-[0_0_6px_rgba(47,125,79,0.7)]"
+                          : message.tone === "warn"
+                          ? "bg-[#a23b2a] shadow-[0_0_6px_rgba(162,59,42,0.7)]"
+                          : "bg-[#52241A] motion-safe:animate-pulse"
+                      }`}
+                    />
+                    <span>{message.text}</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          ) : isIndex ? (
             <div className="mx-auto flex h-full max-w-6xl flex-col gap-5">
               <ExternalIndexView onSave={handleSave} onOpen={handleOpen} />
             </div>

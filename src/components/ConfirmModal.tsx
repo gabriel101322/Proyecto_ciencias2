@@ -40,6 +40,44 @@ export default function ConfirmModal({
   if (!pendingChange) return null
 
   if (pendingChange.type === "section") {
+    if (pendingChange.sectionId === "grafos") {
+      return (
+        <ModalBox>
+          <div className="flex items-center gap-3 mb-2">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800">
+              <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth={2}>
+                <circle cx="6" cy="6" r="3" />
+                <circle cx="18" cy="6" r="3" />
+                <circle cx="12" cy="18" r="3" />
+                <line x1="8.5" y1="7.5" x2="10" y2="15.5" />
+                <line x1="15.5" y1="7.5" x2="14" y2="15.5" />
+              </svg>
+            </span>
+            <h3 className="text-lg font-bold text-[#52241A]">Cambiar a Grafos</h3>
+          </div>
+          <p className="mt-3 text-[14px] leading-relaxed text-[#52241A]/80">
+            Estás a punto de abrir la sección de{" "}
+            <strong className="font-semibold text-[#6B2E24]">Grafos</strong>.
+            Tu estructura de búsqueda actual se reiniciará. ¿Deseas continuar?
+          </p>
+          <div className="mt-7 flex justify-end gap-2.5">
+            <button
+              onClick={() => cancelChange()}
+              className="h-10 rounded-lg border border-[#52241A]/20 bg-white px-4 text-[13px] font-semibold text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5 active:scale-[0.98]"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={() => applyChange(pendingChange, false)}
+              className="h-10 rounded-lg bg-[#6B2E24] px-4 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#52241A] active:scale-[0.98]"
+            >
+              Ir a Grafos
+            </button>
+          </div>
+        </ModalBox>
+      )
+    }
+
     const isCurrentTree = activeOption === "Árboles de Búsqueda"
     const isNewTree = pendingChange.option === "Árboles de Búsqueda"
 

@@ -22,6 +22,19 @@ export const TREE_ALGORITHMS = [
   "Árbol de Huffman"
 ]
 
+export const GRAPH_OPTIONS = [
+  "Caminos mínimos",
+  "Operaciones entre grafos",
+  "Operaciones sobre un grafo",
+  "Árbol de expansión",
+  "Representación matricial",
+  "Coloreado y particionamiento",
+  "Conjuntos independientes y dominantes",
+  "Pareamientos y envolventes",
+] as const
+
+export type GraphTopicOption = (typeof GRAPH_OPTIONS)[number]
+
 export const SECTIONS: Section[] = [
   {
     id: "internas",
@@ -50,6 +63,6 @@ export const SECTIONS: Section[] = [
     id: "grafos",
     label: "Grafos",
     icon: "M6 5a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm12 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm-6 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4ZM8 7l8 0M7.5 8.5 11 13m6-4.5L13 13",
-    options: ["Recorridos", "Ruta más corta", "Árbol de expansión"],
+    options: [...GRAPH_OPTIONS],
   },
 ]
