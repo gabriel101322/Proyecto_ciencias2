@@ -48,6 +48,15 @@ const VIEW_W = 630
 const VIEW_H = 400
 const NODE_R = 21
 
+// Cursors SVG personalizados de alto contraste con núcleo marrón caoba, halo blanco nítido y sombra
+const CURSOR_ADD_VERTEX = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cfilter id='s' x='-25%25' y='-25%25' width='150%25' height='150%25'%3E%3CfeDropShadow dx='0' dy='1.2' stdDeviation='1.5' flood-color='%23000000' flood-opacity='0.6'/%3E%3C/filter%3E%3Cg filter='url(%23s)'%3E%3Ccircle cx='16' cy='16' r='13' fill='%23faf6f2' stroke='%2352241A' stroke-width='2.6'/%3E%3Ccircle cx='16' cy='16' r='5.2' fill='%236B2E24'/%3E%3Cpath d='M16 1.5v6.5M16 24v6.5M1.5 16h6.5M24 16h6.5' stroke='%23ffffff' stroke-width='4.2' stroke-linecap='round'/%3E%3Cpath d='M16 1.5v6.5M16 24v6.5M1.5 16h6.5M24 16h6.5' stroke='%2352241A' stroke-width='2.4' stroke-linecap='round'/%3E%3C/g%3E%3C/svg%3E") 16 16, crosshair`
+
+const CURSOR_ADD_EDGE = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cfilter id='s' x='-25%25' y='-25%25' width='150%25' height='150%25'%3E%3CfeDropShadow dx='0' dy='1.2' stdDeviation='1.5' flood-color='%23000000' flood-opacity='0.6'/%3E%3C/filter%3E%3Cg filter='url(%23s)'%3E%3Cpath d='M4 4l9 20 3-7 7-3z' fill='%2352241A' stroke='%23ffffff' stroke-width='2.2' stroke-linejoin='round'/%3E%3Ccircle cx='23' cy='9' r='6' fill='%23E6B793' stroke='%2352241A' stroke-width='2'/%3E%3Cpath d='M20.5 9h5M23 6.5v5' stroke='%2352241A' stroke-width='1.8' stroke-linecap='round'/%3E%3C/g%3E%3C/svg%3E") 5 5, pointer`
+
+const CURSOR_ADD_EDGE_CONNECTING = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cfilter id='s' x='-25%25' y='-25%25' width='150%25' height='150%25'%3E%3CfeDropShadow dx='0' dy='1.2' stdDeviation='1.5' flood-color='%23000000' flood-opacity='0.65'/%3E%3C/filter%3E%3Cg filter='url(%23s)'%3E%3Ccircle cx='16' cy='16' r='12.5' fill='%232f7d4f' fill-opacity='0.3' stroke='%232f7d4f' stroke-width='2.2' stroke-dasharray='3 2'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%232f7d4f' stroke='%23ffffff' stroke-width='2'/%3E%3Cpath d='M16 3v6M16 23v6M3 16h6M23 16h6' stroke='%23ffffff' stroke-width='3.8' stroke-linecap='round'/%3E%3Cpath d='M16 3v6M16 23v6M3 16h6M23 16h6' stroke='%232f7d4f' stroke-width='2' stroke-linecap='round'/%3E%3C/g%3E%3C/svg%3E") 16 16, crosshair`
+
+const CURSOR_DELETE = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cfilter id='s' x='-25%25' y='-25%25' width='150%25' height='150%25'%3E%3CfeDropShadow dx='0' dy='1.2' stdDeviation='1.5' flood-color='%23000000' flood-opacity='0.6'/%3E%3C/filter%3E%3Cg filter='url(%23s)'%3E%3Ccircle cx='16' cy='16' r='11.5' fill='%23c62828' stroke='%23ffffff' stroke-width='2.2'/%3E%3Cpath d='M11 11l10 10M21 11l-10 10' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round'/%3E%3C/g%3E%3C/svg%3E") 16 16, not-allowed`
+
 interface ComputedEdgeGeometry {
   edge: GraphEdge
   ux: number
@@ -159,6 +168,7 @@ export default function GraphCanvas({
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [pendingEdgeSource, setPendingEdgeSource] = useState<string | null>(null)
   const [editingEdge, setEditingEdge] = useState<{ id: string; value: string; x: number; y: number } | null>(null)
+  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null)
 
   const vMap = new Map(graph.vertices.map((v) => [v.id, v]))
 
@@ -187,13 +197,39 @@ export default function GraphCanvas({
   }
 
   const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (!draggingId || readOnly || !onMoveVertex) return
     const { x, y } = toSvgCoords(e.clientX, e.clientY)
+    setMousePos({ x, y })
+    if (!draggingId || readOnly || !onMoveVertex) return
     onMoveVertex(draggingId, x, y)
   }
 
   const handlePointerUp = () => {
     if (draggingId) setDraggingId(null)
+  }
+
+  const handlePointerLeave = () => {
+    setMousePos(null)
+    if (draggingId) setDraggingId(null)
+  }
+
+  const getCanvasCursor = () => {
+    if (readOnly) return "default"
+    if (draggingId) return "grabbing"
+    if (tool === "add_vertex") return CURSOR_ADD_VERTEX
+    if (tool === "add_edge") return pendingEdgeSource ? CURSOR_ADD_EDGE_CONNECTING : CURSOR_ADD_EDGE
+    if (tool === "delete") return CURSOR_DELETE
+    if (tool === "move") return "default"
+    return "default"
+  }
+
+  const getVertexCursor = (vId: string) => {
+    if (readOnly) return "default"
+    if (tool === "move") return draggingId === vId ? "grabbing" : "grab"
+    if (tool === "add_edge") {
+      return pendingEdgeSource === vId ? "not-allowed" : CURSOR_ADD_EDGE_CONNECTING
+    }
+    if (tool === "delete") return CURSOR_DELETE
+    return "pointer"
   }
 
   const handleVertexPointerDown = (e: React.PointerEvent, vertexId: string) => {
@@ -621,9 +657,9 @@ export default function GraphCanvas({
   }
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#52241A]/15 bg-white shadow-sm">
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#52241A]/15 bg-white shadow-sm h-full">
       {(title || !readOnly) && (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#52241A]/10 bg-[#faf6f2]/80 px-3.5 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-[#52241A]/10 bg-[#faf6f2]/80 px-3 py-1.5 shrink-0">
           {title && (
             <span className="text-xs font-bold uppercase tracking-[0.12em] text-[#52241A]">
               {title}
@@ -637,23 +673,16 @@ export default function GraphCanvas({
         </div>
       )}
 
-      <div className={`relative flex-1 ${compact ? "min-h-[215px]" : "min-h-[340px]"} w-full bg-[#faf6f2]/35`}>
+      <div className="relative flex-1 min-h-0 w-full bg-[#faf6f2]/35 overflow-hidden">
         <svg
           ref={svgRef}
           viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
           onClick={handleSvgClick}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerUp}
-          className={`h-full w-full select-none ${
-            readOnly
-              ? "cursor-default"
-              : tool === "add_vertex"
-              ? "cursor-crosshair"
-              : draggingId
-              ? "cursor-grabbing"
-              : "cursor-default"
-          }`}
+          onPointerLeave={handlePointerLeave}
+          style={{ cursor: getCanvasCursor() }}
+          className="h-full w-full select-none"
         >
           {/* Fondo clicable */}
           <rect x={0} y={0} width={VIEW_W} height={VIEW_H} fill="transparent" className="canvas-bg" />
@@ -838,14 +867,20 @@ export default function GraphCanvas({
                 transform={`translate(${v.x}, ${v.y})`}
                 onPointerDown={(ev) => handleVertexPointerDown(ev, v.id)}
                 opacity={vState?.dimmed ? 0.42 : 1}
-                className={`transition-opacity duration-300 ${
-                  readOnly
-                    ? "cursor-default"
-                    : tool === "move"
-                    ? "cursor-grab active:cursor-grabbing"
-                    : "cursor-pointer"
-                }`}
+                style={{ cursor: getVertexCursor(v.id) }}
+                className="transition-opacity duration-300"
               >
+                {/* Destino candidato resaltado al trazar aristas */}
+                {tool === "add_edge" && pendingEdgeSource && pendingEdgeSource !== v.id && (
+                  <circle
+                    r={NODE_R + 6}
+                    fill="none"
+                    stroke="#2f7d4f"
+                    strokeWidth={3.5}
+                    strokeDasharray="5 3"
+                    className="animate-pulse"
+                  />
+                )}
                 {colors.ring && (
                   <circle
                     r={NODE_R + 6}
@@ -919,6 +954,76 @@ export default function GraphCanvas({
               </g>
             )
           })}
+
+          {/* Vista previa viva del vértice a colocar (+ Vértice activo) */}
+          {tool === "add_vertex" && mousePos && !readOnly && (
+            <g className="pointer-events-none" opacity={0.95}>
+              <circle
+                cx={mousePos.x}
+                cy={mousePos.y}
+                r={NODE_R + 7}
+                fill="none"
+                stroke="#52241A"
+                strokeWidth={1.8}
+                strokeDasharray="4 3"
+                strokeOpacity={0.55}
+              />
+              <circle
+                cx={mousePos.x}
+                cy={mousePos.y}
+                r={NODE_R}
+                fill="#E6B793"
+                fillOpacity={0.55}
+                stroke="#52241A"
+                strokeWidth={2.6}
+              />
+              <circle
+                cx={mousePos.x}
+                cy={mousePos.y}
+                r={4}
+                fill="#52241A"
+              />
+              <text
+                x={mousePos.x}
+                y={mousePos.y + 4.5}
+                textAnchor="middle"
+                fontSize="13"
+                fontWeight="800"
+                fill="#52241A"
+              >
+                +
+              </text>
+            </g>
+          )}
+
+          {/* Línea elástica interactiva al trazar aristas (+ Arista activo) */}
+          {tool === "add_edge" && pendingEdgeSource && mousePos && !readOnly && (() => {
+            const src = vMap.get(pendingEdgeSource)
+            if (!src) return null
+            return (
+              <g className="pointer-events-none">
+                <line
+                  x1={src.x}
+                  y1={src.y}
+                  x2={mousePos.x}
+                  y2={mousePos.y}
+                  stroke="#52241A"
+                  strokeWidth={3}
+                  strokeDasharray="6 4"
+                  strokeLinecap="round"
+                  opacity={0.88}
+                />
+                <circle
+                  cx={mousePos.x}
+                  cy={mousePos.y}
+                  r={7}
+                  fill="#E6B793"
+                  stroke="#52241A"
+                  strokeWidth={2}
+                />
+              </g>
+            )
+          })()}
         </svg>
 
         {graph.vertices.length === 0 && (

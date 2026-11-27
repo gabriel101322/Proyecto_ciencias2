@@ -17,12 +17,12 @@ export default function Sidebar({
   selectSection,
 }: SidebarProps) {
   return (
-    <aside className="relative flex flex-col bg-gradient-to-b from-[#52241A] to-[#3a1810] text-white border-r border-[#52241A]/30 select-none">
+    <aside className="relative flex flex-col h-full w-full bg-gradient-to-b from-[#52241A] to-[#3a1810] text-white border-r border-[#52241A]/30 select-none overflow-visible">
       {/* collapse toggle — sits on the seam between header and sidebar */}
       <button
         onClick={() => setCollapsed((c) => !c)}
         aria-label={collapsed ? "Expandir barra" : "Minimizar barra"}
-        className="absolute -top-6 right-0 z-20 flex size-12 translate-x-1/2 items-center justify-center rounded-full bg-[#E6B793] text-[#52241A] shadow-[0_6px_20px_rgba(43,22,16,0.35)] ring-4 ring-[#faf6f2] transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-[#ebd0b7]"
+        className="absolute -top-6 right-0 z-50 flex size-12 translate-x-1/2 items-center justify-center rounded-full bg-[#E6B793] text-[#52241A] shadow-[0_6px_20px_rgba(43,22,16,0.35)] ring-4 ring-[#faf6f2] transition-all duration-300 hover:scale-110 active:scale-95 hover:bg-[#ebd0b7]"
       >
         <svg
           viewBox="0 0 24 24"
@@ -80,7 +80,7 @@ export default function Sidebar({
 
                 {!collapsed && (
                   <span className="relative flex min-w-0 flex-col leading-tight">
-                    <span className="truncate text-[12px] font-bold text-white">
+                    <span className="text-[12.5px] font-bold text-white whitespace-nowrap">
                       {section.label}
                     </span>
                     <span className="text-[10px] uppercase tracking-[0.14em] text-white/50">

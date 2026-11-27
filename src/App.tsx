@@ -2019,7 +2019,7 @@ export default function App() {
 
 
   return (
-    <div className="grid h-screen w-full grid-rows-[auto_1fr] bg-[#faf6f2] text-[#2b1610]">
+    <div className="flex h-screen w-full max-w-full overflow-hidden flex-col bg-[#faf6f2] text-[#2b1610]">
       <Header
         current={current}
         activeOption={activeOption}
@@ -2027,27 +2027,27 @@ export default function App() {
         onAlgorithmChange={handleAlgorithmChange}
       />
 
-      <div
-        className="grid min-h-0 transition-[grid-template-columns] duration-300 ease-in-out"
-        style={{ gridTemplateColumns: `${collapsed ? 64 : 196}px 1fr` }}
-      >
-        <Sidebar
-          collapsed={collapsed}
-          setCollapsed={setCollapsed}
-          sections={SECTIONS}
-          activeSection={activeSection}
-          selectSection={selectSection}
-        />
+      <div className="flex flex-1 min-h-0 min-w-0 w-full relative">
+        <div
+          className="relative z-30 shrink-0 h-full transition-[width] duration-300 ease-in-out"
+          style={{ width: `${collapsed ? 64 : 240}px` }}
+        >
+          <Sidebar
+            collapsed={collapsed}
+            setCollapsed={setCollapsed}
+            sections={SECTIONS}
+            activeSection={activeSection}
+            selectSection={selectSection}
+          />
+        </div>
 
-        <main className="min-w-0 overflow-auto bg-[#faf6f2] p-8">
+        <main className={`flex-1 min-w-0 min-h-0 ${activeSection === "grafos" ? "overflow-hidden" : "overflow-auto"} bg-[#faf6f2] p-3 sm:p-3.5 flex flex-col`}>
           {activeSection === "grafos" ? (
-            <div className="flex h-full flex-col gap-3">
-              <div className="min-h-0 flex-1">
-                <GraphWorkspace
-                  activeOption={activeOption}
-                  onNotify={(text, tone) => setMessage({ text, tone })}
-                />
-              </div>
+            <div className="relative flex h-full w-full min-h-0 min-w-0 flex-1 flex-col">
+              <GraphWorkspace
+                activeOption={activeOption}
+                onNotify={(text, tone) => setMessage({ text, tone })}
+              />
               <AnimatePresence>
                 {message && (
                   <motion.div
@@ -2055,21 +2055,21 @@ export default function App() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -6, scale: 0.98 }}
                     transition={{ duration: 0.2 }}
-                    className={`mx-auto flex w-full max-w-7xl items-center gap-2.5 rounded-xl px-4 py-3 text-[13px] font-medium shadow-xs border ${
+                    className={`fixed bottom-4 right-6 z-50 flex items-center gap-2.5 rounded-xl px-4 py-2 text-[13px] font-medium shadow-lg border backdrop-blur-md ${
                       message.tone === "ok"
-                        ? "bg-[#2f7d4f]/10 text-[#1f5c36] border-[#2f7d4f]/25"
+                        ? "bg-[#2f7d4f]/95 text-white border-[#2f7d4f]"
                         : message.tone === "warn"
-                        ? "bg-[#a23b2a]/10 text-[#852b1d] border-[#a23b2a]/25"
-                        : "bg-[#52241A]/8 text-[#52241A] border-[#52241A]/15"
+                        ? "bg-[#a23b2a]/95 text-white border-[#a23b2a]"
+                        : "bg-[#52241A]/95 text-white border-[#52241A]"
                     }`}
                   >
                     <span
                       className={`inline-block size-2 shrink-0 rounded-full ${
                         message.tone === "ok"
-                          ? "bg-[#2f7d4f] shadow-[0_0_6px_rgba(47,125,79,0.7)]"
+                          ? "bg-white shadow-[0_0_6px_rgba(255,255,255,0.8)]"
                           : message.tone === "warn"
-                          ? "bg-[#a23b2a] shadow-[0_0_6px_rgba(162,59,42,0.7)]"
-                          : "bg-[#52241A] motion-safe:animate-pulse"
+                          ? "bg-amber-200 shadow-[0_0_6px_rgba(253,230,138,0.8)]"
+                          : "bg-[#E6B793] motion-safe:animate-pulse"
                       }`}
                     />
                     <span>{message.text}</span>
@@ -2138,7 +2138,7 @@ export default function App() {
               )}
 
               {isDynamic && (
-                <div className="flex items-end gap-1.5 flex-wrap">
+                <div className="flex items-end gap-3.5 flex-wrap">
                   <label className="flex flex-col gap-1.5">
                     <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#52241A]/60">
                       Tamaño de la clave
@@ -2242,33 +2242,33 @@ export default function App() {
                         keys: [],
                         history: []
                       })
-                    }} className="h-10 shrink-0 rounded-lg bg-[#52241A] px-2 text-[12px] xl:px-3 xl:text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#6B2E24] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 hover:disabled:bg-[#52241A] ml-2">
+                    }} className="h-10 shrink-0 rounded-lg bg-[#52241A] px-3.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#6B2E24] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 hover:disabled:bg-[#52241A]">
                       Generar Tabla Dinámica
                     </button>
                   ) : (
                     <button onClick={() => {
                       setDynamicState(null)
-                    }} className="h-10 shrink-0 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-3 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5 disabled:cursor-not-allowed disabled:opacity-50 ml-2">
+                    }} className="h-10 shrink-0 rounded-lg border border-[#52241A]/20 bg-white px-3.5 text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5 disabled:cursor-not-allowed disabled:opacity-50">
                       Borrar Tabla
                     </button>
                   )}
 
-                  <div className="ml-auto flex items-end gap-1.5">
-                    <label className="flex h-10 cursor-pointer items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-2.5 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5">
+                  <div className="ml-auto flex items-end gap-2.5">
+                    <label className="flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-3 text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5">
                       <input type="file" accept=".json" className="hidden" onChange={handleOpen} />
                       <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                         <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
                       </svg>
                       Abrir
                     </label>
-                    <button onClick={handleSave} className="flex h-10 items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-2.5 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5">
+                    <button onClick={handleSave} className="flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-3 text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5">
                       <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                         <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
                         <path d="M17 21v-8H7v8M7 3v5h8" />
                       </svg>
                       Guardar
                     </button>
-                    <button onClick={() => window.print()} className="flex h-10 items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-2.5 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5">
+                    <button onClick={() => window.print()} className="flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-3 text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5 active:scale-[0.98]">
                       <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                         <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6v-8Z" />
                       </svg>

@@ -22,7 +22,7 @@ export function TopTreeControls({
   onOpen,
 }: TopTreeControlsProps) {
   return (
-    <div className="flex items-end gap-3">
+    <div className="flex flex-wrap items-end gap-3">
       <label className="flex flex-col gap-1.5">
         <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#52241A]/60">
           Algoritmo de Árbol
@@ -53,8 +53,8 @@ export function TopTreeControls({
         Borrar árbol
       </button>
 
-      <div className="ml-auto flex items-end gap-1.5">
-        <label className="flex h-10 cursor-pointer items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-2.5 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5">
+      <div className="ml-auto flex items-end gap-2.5">
+        <label className="flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-3 text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5">
           <input type="file" accept=".json" className="hidden" onChange={onOpen} />
           <svg
             viewBox="0 0 24 24"
@@ -69,7 +69,7 @@ export function TopTreeControls({
           </svg>
           Abrir
         </label>
-        <button onClick={onSave} className="flex h-10 items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-2.5 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5">
+        <button onClick={onSave} className="flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-3 text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5">
           <svg
             viewBox="0 0 24 24"
             className="size-4"
@@ -86,7 +86,7 @@ export function TopTreeControls({
         </button>
         <button
           onClick={() => window.print()}
-          className="flex h-10 items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-2.5 text-[12px] xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5 active:scale-[0.98]"
+          className="flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-[#52241A]/20 bg-white px-3 text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5 active:scale-[0.98]"
         >
           <svg
             viewBox="0 0 24 24"
@@ -130,7 +130,7 @@ export function BottomTreeControls({
   const isHuffman = treeAlgo === "Árbol de Huffman"
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-3">
       <span className="shrink-0 text-sm font-semibold text-[#52241A]">
         {isHuffman ? "Texto:" : "Clave:"}
       </span>
@@ -145,7 +145,7 @@ export function BottomTreeControls({
       <button
         onClick={insertKey}
         disabled={busy || !keyInput.trim()}
-        className="h-10 shrink-0 rounded-lg bg-[#6B2E24] px-3 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#52241A] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+        className="h-10 shrink-0 rounded-lg bg-[#6B2E24] px-3.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#52241A] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
       >
         {isHuffman ? "Generar Árbol" : "Insertar clave"}
       </button>
@@ -153,7 +153,7 @@ export function BottomTreeControls({
       <button
         onClick={deleteKey}
         disabled={busy || !hasData || !keyInput.trim()}
-        className="h-10 shrink-0 rounded-lg border border-[#52241A]/20 bg-white px-2 text-[12px] xl:px-3 xl:text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5 disabled:cursor-not-allowed disabled:opacity-50"
+        className="h-10 shrink-0 rounded-lg border border-[#52241A]/20 bg-white px-3.5 text-[13px] font-medium text-[#52241A] shadow-sm transition hover:bg-[#52241A]/5 disabled:cursor-not-allowed disabled:opacity-50"
       >
         Borrar clave
       </button>
@@ -161,7 +161,7 @@ export function BottomTreeControls({
       <button
         onClick={searchKey}
         disabled={busy || !hasData || !keyInput.trim()}
-        className="h-10 shrink-0 rounded-lg bg-[#52241A] px-3 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#3d1912] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+        className="h-10 shrink-0 rounded-lg bg-[#52241A] px-4 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#3d1912] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
       >
         Buscar clave
       </button>
